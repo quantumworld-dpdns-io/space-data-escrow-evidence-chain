@@ -32,6 +32,7 @@ type Service struct {
 	attMu    sync.RWMutex
 	att      map[string][]domain.Attestation
 	metrics  *telemetry.Registry
+	pqcSigner crypto.PQCSigner
 }
 
 func New(e repo.EvidenceRepository, c repo.CustodyRepository, a repo.AuditRepository) *Service {
@@ -40,6 +41,7 @@ func New(e repo.EvidenceRepository, c repo.CustodyRepository, a repo.AuditReposi
 		qdrant: qdrant.NewMemoryClient(), ollama: ollama.NewMemoryClient(), jobs: enrichment.NewStore(),
 		att:     map[string][]domain.Attestation{},
 		metrics: telemetry.NewRegistry(),
+		pqcSigner: crypto.DilithiumSigner{},
 	}
 }
 
@@ -298,6 +300,25 @@ func (s *Service) AddAttestation(in domain.Attestation) (domain.Attestation, err
 	}
 	if in.Timestamp.IsZero() {
 		in.Timestamp = time.Now().UTC()
+	}
+	if in.ClassicalSignature == "" {
+		if in.Signature != "" {
+			in.ClassicalSignature = in.Signature
+		} else {
+			in.ClassicalSignature = "classical-signature-placeholder"
+		}
+	}
+	if in.DualSign {
+		if in.PQCAlgorithm == "" {
+			in.PQCAlgorithm = s.pqcSigner.Algorithm()
+		}
+		if in.PQCSignature == "" {
+			sig, _ := s.pqcSigner.Sign([]byte(in.EvidenceID + ":" + in.Signer))
+			in.PQCSignature = sig
+		}
+	}
+	if in.Signature == "" {
+		in.Signature = in.ClassicalSignature
 	}
 	s.attMu.Lock()
 	defer s.attMu.Unlock()
