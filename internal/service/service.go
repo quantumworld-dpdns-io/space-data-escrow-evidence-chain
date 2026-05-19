@@ -28,12 +28,15 @@ type Service struct {
 	qdrant   qdrant.Client
 	ollama   ollama.Client
 	jobs     *enrichment.Store
+	attMu    sync.RWMutex
+	att      map[string][]domain.Attestation
 }
 
 func New(e repo.EvidenceRepository, c repo.CustodyRepository, a repo.AuditRepository) *Service {
 	return &Service{
 		evidence: e, custody: c, audit: a, idem: map[string]string{},
 		qdrant: qdrant.NewMemoryClient(), ollama: ollama.NewMemoryClient(), jobs: enrichment.NewStore(),
+		att: map[string][]domain.Attestation{},
 	}
 }
 
@@ -268,6 +271,75 @@ func (s *Service) ListEvidence(query ListEvidenceQuery) ListEvidenceResult {
 }
 
 func (s *Service) AuditEntries() []string { return s.audit.List() }
+
+func (s *Service) ChainTimeline(evidenceID string) ([]domain.CustodyEvent, error) {
+	if _, ok := s.evidence.Get(evidenceID); !ok {
+		return nil, errors.New("evidence_not_found")
+	}
+	return s.custody.ListByEvidenceID(evidenceID), nil
+}
+
+func (s *Service) AddAttestation(in domain.Attestation) (domain.Attestation, error) {
+	if in.EvidenceID == "" || in.Signer == "" || in.Algorithm == "" || in.Signature == "" {
+		return domain.Attestation{}, errors.New("invalid_attestation")
+	}
+	if _, ok := s.evidence.Get(in.EvidenceID); !ok {
+		return domain.Attestation{}, errors.New("evidence_not_found")
+	}
+	if in.Timestamp.IsZero() {
+		in.Timestamp = time.Now().UTC()
+	}
+	s.attMu.Lock()
+	defer s.attMu.Unlock()
+	s.att[in.EvidenceID] = append(s.att[in.EvidenceID], in)
+	_ = s.audit.Add("attestation_added:" + in.EvidenceID)
+	return in, nil
+}
+
+func (s *Service) BulkVerify(ids []string) []domain.VerificationReport {
+	out := make([]domain.VerificationReport, 0, len(ids))
+	for _, id := range ids {
+		out = append(out, s.VerifyEvidence(id))
+	}
+	return out
+}
+
+type ProofBundle struct {
+	Evidence     domain.EvidenceRecord      `json:"evidence"`
+	Custody      []domain.CustodyEvent      `json:"custody"`
+	Attestations []domain.Attestation       `json:"attestations"`
+	Verification domain.VerificationReport  `json:"verification"`
+}
+
+func (s *Service) ExportProofBundle(evidenceID string) (ProofBundle, error) {
+	rec, ok := s.evidence.Get(evidenceID)
+	if !ok {
+		return ProofBundle{}, errors.New("evidence_not_found")
+	}
+	s.attMu.RLock()
+	att := append([]domain.Attestation(nil), s.att[evidenceID]...)
+	s.attMu.RUnlock()
+	return ProofBundle{
+		Evidence:     rec,
+		Custody:      s.custody.ListByEvidenceID(evidenceID),
+		Attestations: att,
+		Verification: s.VerifyEvidence(evidenceID),
+	}, nil
+}
+
+type KeyRotationMetadata struct {
+	CurrentKeyID string `json:"current_key_id"`
+	Algorithm    string `json:"algorithm"`
+	NextRotation string `json:"next_rotation"`
+}
+
+func (s *Service) GetKeyRotationMetadata() KeyRotationMetadata {
+	return KeyRotationMetadata{
+		CurrentKeyID: "key-dev-001",
+		Algorithm:    "ed25519",
+		NextRotation: time.Now().UTC().Add(30 * 24 * time.Hour).Format(time.RFC3339),
+	}
+}
 
 func (s *Service) TriggerEnrichment(evidenceID string) (enrichment.Job, error) {
 	rec, ok := s.evidence.Get(evidenceID)
