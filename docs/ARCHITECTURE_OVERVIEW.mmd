@@ -1,0 +1,12 @@
+flowchart TD
+    Client[Client / SDK / CLI] --> API[Evidence API Service]
+    API --> EV[Evidence Service]
+    API --> CU[Custody Service]
+    API --> VE[Verification Service]
+    EV --> MEM[(In-Memory Repo: v0)]
+    CU --> MEM
+    VE --> MEM
+    API --> OTEL[OpenTelemetry Traces/Metrics]
+    API -. planned .-> DUCK[(DuckDB)]
+    API -. planned .-> QDRANT[(Qdrant)]
+    API -. planned .-> OLLAMA[(Ollama)]
