@@ -1,0 +1,16 @@
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicy
+metadata:
+  name: egress-anomaly-detection
+spec:
+  tracepoints:
+    - subsystem: "syscalls"
+      event: "sys_enter_connect"
+      selectors:
+        - matchArgs:
+            - index: 0
+              operator: "NotDPort"
+              values:
+                - "53"
+                - "80"
+                - "443"

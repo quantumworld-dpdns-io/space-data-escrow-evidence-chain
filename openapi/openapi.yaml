@@ -1,0 +1,274 @@
+openapi: 3.0.3
+info:
+  title: Space Data Escrow Evidence Chain API
+  version: 0.4.0
+servers:
+  - url: http://localhost:8080
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    APIError:
+      type: object
+      properties:
+        error: { type: string }
+        code: { type: string }
+      required: [error]
+    EvidenceRecord:
+      type: object
+      properties:
+        id: { type: string }
+        external_id: { type: string }
+        source: { type: string }
+        type: { type: string }
+        payload:
+          type: object
+          additionalProperties: { type: string }
+        hash: { type: string }
+        created_at: { type: string, format: date-time }
+    CustodyEvent:
+      type: object
+      properties:
+        evidence_id: { type: string }
+        actor: { type: string }
+        action: { type: string }
+        timestamp: { type: string, format: date-time }
+        note: { type: string }
+    Attestation:
+      type: object
+      properties:
+        evidence_id: { type: string }
+        signer: { type: string }
+        signature: { type: string }
+        algorithm: { type: string }
+        timestamp: { type: string, format: date-time }
+        dual_sign: { type: boolean }
+        classical_signature: { type: string }
+        pqc_signature: { type: string }
+        pqc_algorithm: { type: string }
+    VerificationReport:
+      type: object
+      properties:
+        evidence_id: { type: string }
+        chain_valid: { type: boolean }
+        signature_valid: { type: boolean }
+        integrity_valid: { type: boolean }
+        failure_reason: { type: string }
+        verified_at: { type: string, format: date-time }
+        last_custody_actor: { type: string }
+        canonical_payload: { type: string }
+        computed_hash: { type: string }
+    ListEvidenceResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/EvidenceRecord' }
+        page: { type: integer }
+        page_size: { type: integer }
+        total: { type: integer }
+      required: [items, page, page_size, total]
+    EnrichmentJobResponse:
+      type: object
+      properties:
+        id: { type: string }
+        evidence_id: { type: string }
+        status: { type: string }
+        output:
+          type: object
+          additionalProperties: { type: string }
+        error: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    TriggerEnrichmentRequest:
+      type: object
+      required: [evidence_id]
+      properties:
+        evidence_id: { type: string }
+    BulkVerifyRequest:
+      type: object
+      required: [ids]
+      properties:
+        ids:
+          type: array
+          items: { type: string }
+    ProofBundle:
+      type: object
+      properties:
+        evidence: { $ref: '#/components/schemas/EvidenceRecord' }
+        custody:
+          type: array
+          items: { $ref: '#/components/schemas/CustodyEvent' }
+        attestations:
+          type: array
+          items: { $ref: '#/components/schemas/Attestation' }
+        verification: { $ref: '#/components/schemas/VerificationReport' }
+paths:
+  /healthz:
+    get:
+      responses: { '200': { description: OK } }
+  /readyz:
+    get:
+      responses: { '200': { description: Ready } }
+  /version:
+    get:
+      responses: { '200': { description: Version } }
+  /v1/evidence:
+    post:
+      security:
+        - ApiKeyAuth: []
+        - BearerAuth: []
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [external_id, source, type, payload]
+              properties:
+                external_id: { type: string }
+                source: { type: string }
+                type: { type: string }
+                payload:
+                  type: object
+                  additionalProperties: { type: string }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/EvidenceRecord' } } } }
+        '200': { description: Idempotent replay, content: { application/json: { schema: { $ref: '#/components/schemas/EvidenceRecord' } } } }
+        '400': { description: Error, content: { application/json: { schema: { $ref: '#/components/schemas/APIError' } } } }
+  /v1/evidence/{id}:
+    get:
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/EvidenceRecord' } } } }
+        '404': { description: Not found }
+  /v1/custody:
+    post:
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CustodyEvent' }
+      responses:
+        '202': { description: Accepted }
+  /v1/attest:
+    post:
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Attestation' }
+      responses:
+        '202': { description: Accepted }
+  /v1/chain/{id}:
+    get:
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Timeline }
+  /v1/verify/{id}:
+    post:
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Verification, content: { application/json: { schema: { $ref: '#/components/schemas/VerificationReport' } } } }
+  /v1/verify/bulk:
+    post:
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BulkVerifyRequest' }
+      responses:
+        '200':
+          description: Bulk verification
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/VerificationReport' }
+  /v1/search:
+    get:
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      parameters:
+        - in: query
+          name: q
+          schema: { type: string }
+        - in: query
+          name: mode
+          schema: { type: string, enum: [default, semantic] }
+        - in: query
+          name: page
+          schema: { type: integer }
+        - in: query
+          name: page_size
+          schema: { type: integer }
+      responses:
+        '200': { description: Results, content: { application/json: { schema: { $ref: '#/components/schemas/ListEvidenceResponse' } } } }
+  /v1/audit:
+    get:
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      responses:
+        '200': { description: Audit entries }
+  /v1/enrich:
+    post:
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TriggerEnrichmentRequest' }
+      responses:
+        '202': { description: Accepted, content: { application/json: { schema: { $ref: '#/components/schemas/EnrichmentJobResponse' } } } }
+  /v1/enrich/{job_id}:
+    get:
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      parameters:
+        - in: path
+          name: job_id
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Job status, content: { application/json: { schema: { $ref: '#/components/schemas/EnrichmentJobResponse' } } } }
+  /v1/proof/{id}:
+    get:
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Proof bundle, content: { application/json: { schema: { $ref: '#/components/schemas/ProofBundle' } } } }
+  /v1/admin/key-rotation:
+    get:
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      responses:
+        '200': { description: Key rotation metadata }

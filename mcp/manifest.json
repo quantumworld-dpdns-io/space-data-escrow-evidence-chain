@@ -1,0 +1,11 @@
+{
+  "name": "space-data-escrow-mcp",
+  "version": "0.1.0",
+  "description": "MCP action surface for evidence chain operations",
+  "actions": [
+    {"name": "evidence_ingest", "method": "POST", "path": "/v1/evidence"},
+    {"name": "chain_verify", "method": "POST", "path": "/v1/verify/{id}"},
+    {"name": "semantic_search", "method": "GET", "path": "/v1/search?mode=semantic"},
+    {"name": "audit_query", "method": "GET", "path": "/v1/audit"}
+  ]
+}

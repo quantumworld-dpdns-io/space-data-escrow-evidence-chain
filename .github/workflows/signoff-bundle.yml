@@ -1,0 +1,19 @@
+name: Sign-Off Bundle
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+
+jobs:
+  assemble-signoff-bundle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build sign-off bundle
+        run: bash scripts/release/build_signoff_bundle.sh artifacts/signoff
+      - name: Upload sign-off bundle artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: signoff-bundle
+          path: artifacts/signoff/

@@ -1,0 +1,39 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.x'
+      - name: Build binary
+        run: |
+          mkdir -p artifacts
+          go build -o artifacts/evidence-api ./cmd/api
+      - name: Generate SBOM and provenance
+        run: |
+          bash scripts/release/generate_sbom.sh
+          bash scripts/release/generate_provenance.sh
+      - name: Create release notes
+        run: |
+          echo "# Release ${GITHUB_REF_NAME}" > artifacts/release-notes.md
+          echo "Automated release build." >> artifacts/release-notes.md
+          echo "See Post-Deploy Verify workflow for verification evidence." >> artifacts/release-notes.md
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/evidence-api
+            artifacts/sbom.spdx.json
+            artifacts/provenance.json
+            artifacts/release-notes.md
+          body_path: artifacts/release-notes.md

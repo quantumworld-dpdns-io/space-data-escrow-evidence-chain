@@ -1,0 +1,37 @@
+name: Post-Deploy Verify
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: 'Deployment base URL (e.g., https://api.example.com)'
+        required: true
+        type: string
+      api_key:
+        description: 'API key for verification requests'
+        required: true
+        type: string
+  workflow_run:
+    workflows: ["Release"]
+    types: [completed]
+
+jobs:
+  verify-dispatched:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run post-deploy smoke verification
+        env:
+          API_KEY: ${{ inputs.api_key }}
+        run: |
+          bash scripts/security/post_deploy_smoke.sh "${{ inputs.base_url }}"
+
+  verify-after-release:
+    if: github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Post-release verification skipped by default
+        run: |
+          echo "Release succeeded. Trigger workflow_dispatch with target URL + API key for environment verification."

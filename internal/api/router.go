@@ -1,0 +1,324 @@
+package api
+
+import (
+	"encoding/json"
+	"net/http"
+	"strings"
+	"time"
+
+	"github.com/quantumworld-dpdns-io/space-data-escrow-evidence-chain/internal/auth"
+	"github.com/quantumworld-dpdns-io/space-data-escrow-evidence-chain/internal/service"
+)
+
+type Router struct {
+	svc    *service.Service
+	apiKey string
+	meta   map[string]string
+	mux    *http.ServeMux
+}
+
+func NewRouter(svc *service.Service, apiKey string, meta map[string]string) *Router {
+	r := &Router{svc: svc, apiKey: apiKey, meta: meta, mux: http.NewServeMux()}
+	r.routes()
+	return r
+}
+
+func (r *Router) Handler() http.Handler { return r.mux }
+
+func (r *Router) routes() {
+	r.mux.HandleFunc("/healthz", r.health)
+	r.mux.HandleFunc("/readyz", r.ready)
+	r.mux.HandleFunc("/version", r.version)
+	r.mux.HandleFunc("/v1/evidence", r.withAuth(r.evidenceCreate))
+	r.mux.HandleFunc("/v1/evidence/", r.withAuth(r.evidenceGet))
+	r.mux.HandleFunc("/v1/custody", r.withAuth(r.custodyAppend))
+	r.mux.HandleFunc("/v1/verify/", r.withAuth(r.verify))
+	r.mux.HandleFunc("/v1/verify/bulk", r.withAuth(r.verifyBulk))
+	r.mux.HandleFunc("/v1/search", r.withAuth(r.search))
+	r.mux.HandleFunc("/v1/audit", r.withAuth(r.audit))
+	r.mux.HandleFunc("/v1/enrich", r.withAuth(r.enrichTrigger))
+	r.mux.HandleFunc("/v1/enrich/", r.withAuth(r.enrichStatus))
+	r.mux.HandleFunc("/v1/chain/", r.withAuth(r.chainTimeline))
+	r.mux.HandleFunc("/v1/attest", r.withAuth(r.attest))
+	r.mux.HandleFunc("/v1/proof/", r.withAuth(r.proofExport))
+	r.mux.HandleFunc("/v1/admin/key-rotation", r.withAuth(r.keyRotation))
+}
+
+func (r *Router) withAuth(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		principal, err := auth.Authenticate(req, r.apiKey)
+		if err != nil {
+			writeJSON(w, http.StatusUnauthorized, APIError{Error: "unauthorized", Code: "AUTH_001"})
+			return
+		}
+		basePath := req.URL.Path
+		if strings.HasPrefix(basePath, "/v1/verify/") {
+			basePath = "/v1/verify"
+		}
+		if strings.HasPrefix(basePath, "/v1/chain/") {
+			basePath = "/v1/chain"
+		}
+		if strings.HasPrefix(basePath, "/v1/enrich/") {
+			basePath = "/v1/enrich"
+		}
+		if strings.HasPrefix(basePath, "/v1/proof/") {
+			basePath = "/v1/proof"
+		}
+		if !auth.IsAllowed(principal.Role, basePath, req.Method) {
+			writeJSON(w, http.StatusForbidden, APIError{Error: "forbidden", Code: "AUTH_403"})
+			return
+		}
+		next(w, req)
+	}
+}
+
+func (r *Router) health(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "time": time.Now().UTC().Format(time.RFC3339)})
+}
+
+func (r *Router) ready(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ready"})
+}
+
+func (r *Router) version(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]string{
+		"version":    r.meta["version"],
+		"commit":     r.meta["commit"],
+		"build_date": r.meta["build_date"],
+	})
+}
+
+func (r *Router) evidenceCreate(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, APIError{Error: "method not allowed"})
+		return
+	}
+	var in CreateEvidenceRequest
+	if err := json.NewDecoder(req.Body).Decode(&in); err != nil {
+		writeJSON(w, http.StatusBadRequest, APIError{Error: err.Error(), Code: "REQ_001"})
+		return
+	}
+	rec, created, err := r.svc.CreateEvidenceWithIdempotency(req.Header.Get("Idempotency-Key"), service.CreateEvidenceInput(in))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, APIError{Error: err.Error(), Code: "VAL_001"})
+		return
+	}
+	if !created {
+		writeJSON(w, http.StatusOK, CreateEvidenceResponse(rec))
+		return
+	}
+	writeJSON(w, http.StatusCreated, CreateEvidenceResponse(rec))
+}
+
+func (r *Router) evidenceGet(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, APIError{Error: "method not allowed"})
+		return
+	}
+	id := strings.TrimPrefix(req.URL.Path, "/v1/evidence/")
+	rec, ok := r.svc.GetEvidence(id)
+	if !ok {
+		writeJSON(w, http.StatusNotFound, APIError{Error: "not found", Code: "EVID_404"})
+		return
+	}
+	writeJSON(w, http.StatusOK, GetEvidenceResponse(rec))
+}
+
+func (r *Router) custodyAppend(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, APIError{Error: "method not allowed"})
+		return
+	}
+	var evt CustodyAppendRequest
+	if err := json.NewDecoder(req.Body).Decode(&evt); err != nil {
+		writeJSON(w, http.StatusBadRequest, APIError{Error: err.Error(), Code: "REQ_001"})
+		return
+	}
+	if err := r.svc.AppendCustody(evt); err != nil {
+		writeJSON(w, http.StatusBadRequest, APIError{Error: err.Error(), Code: "VAL_002"})
+		return
+	}
+	w.WriteHeader(http.StatusAccepted)
+}
+
+func (r *Router) verify(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, APIError{Error: "method not allowed"})
+		return
+	}
+	id := strings.TrimPrefix(req.URL.Path, "/v1/verify/")
+	report := r.svc.VerifyEvidence(id)
+	if report.FailureReason == "not_found" {
+		writeJSON(w, http.StatusNotFound, VerifyResponse(report))
+		return
+	}
+	writeJSON(w, http.StatusOK, VerifyResponse(report))
+}
+
+func (r *Router) verifyBulk(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, APIError{Error: "method not allowed"})
+		return
+	}
+	var in struct {
+		IDs []string `json:"ids"`
+	}
+	if err := json.NewDecoder(req.Body).Decode(&in); err != nil {
+		writeJSON(w, http.StatusBadRequest, APIError{Error: err.Error(), Code: "REQ_001"})
+		return
+	}
+	writeJSON(w, http.StatusOK, r.svc.BulkVerify(in.IDs))
+}
+
+func (r *Router) search(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, APIError{Error: "method not allowed"})
+		return
+	}
+	query := ParseListEvidenceQuery(
+		req.URL.Query().Get("page"),
+		req.URL.Query().Get("page_size"),
+		req.URL.Query().Get("q"),
+		req.URL.Query().Get("source"),
+		req.URL.Query().Get("type"),
+		req.URL.Query().Get("sort_by"),
+		req.URL.Query().Get("sort_order"),
+	)
+	result := r.svc.ListEvidence(query)
+	if req.URL.Query().Get("mode") == "semantic" {
+		items, err := r.svc.SemanticSearch(req.URL.Query().Get("q"), query.PageSize)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, APIError{Error: err.Error(), Code: "SRCH_001"})
+			return
+		}
+		writeJSON(w, http.StatusOK, ListEvidenceResponse{
+			Items:    items,
+			Page:     1,
+			PageSize: len(items),
+			Total:    len(items),
+		})
+		return
+	}
+	writeJSON(w, http.StatusOK, ListEvidenceResponse{
+		Items:    result.Items,
+		Page:     result.Page,
+		PageSize: result.PageSize,
+		Total:    result.Total,
+	})
+}
+
+func (r *Router) audit(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, APIError{Error: "method not allowed"})
+		return
+	}
+	writeJSON(w, http.StatusOK, AuditResponse{Entries: r.svc.AuditEntries()})
+}
+
+func (r *Router) enrichTrigger(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, APIError{Error: "method not allowed"})
+		return
+	}
+	var in TriggerEnrichmentRequest
+	if err := json.NewDecoder(req.Body).Decode(&in); err != nil {
+		writeJSON(w, http.StatusBadRequest, APIError{Error: err.Error(), Code: "REQ_001"})
+		return
+	}
+	job, err := r.svc.TriggerEnrichment(in.EvidenceID)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, APIError{Error: err.Error(), Code: "ENRICH_404"})
+		return
+	}
+	writeJSON(w, http.StatusAccepted, EnrichmentJobResponse{
+		ID:         job.ID,
+		EvidenceID: job.EvidenceID,
+		Status:     string(job.Status),
+		Output:     job.Output,
+		Error:      job.Error,
+		CreatedAt:  job.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:  job.UpdatedAt.Format(time.RFC3339),
+	})
+}
+
+func (r *Router) enrichStatus(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, APIError{Error: "method not allowed"})
+		return
+	}
+	id := strings.TrimPrefix(req.URL.Path, "/v1/enrich/")
+	job, ok := r.svc.GetEnrichmentJob(id)
+	if !ok {
+		writeJSON(w, http.StatusNotFound, APIError{Error: "job not found", Code: "ENRICH_404"})
+		return
+	}
+	writeJSON(w, http.StatusOK, EnrichmentJobResponse{
+		ID:         job.ID,
+		EvidenceID: job.EvidenceID,
+		Status:     string(job.Status),
+		Output:     job.Output,
+		Error:      job.Error,
+		CreatedAt:  job.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:  job.UpdatedAt.Format(time.RFC3339),
+	})
+}
+
+func (r *Router) chainTimeline(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, APIError{Error: "method not allowed"})
+		return
+	}
+	id := strings.TrimPrefix(req.URL.Path, "/v1/chain/")
+	items, err := r.svc.ChainTimeline(id)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, APIError{Error: err.Error(), Code: "EVID_404"})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"evidence_id": id, "custody": items})
+}
+
+func (r *Router) attest(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, APIError{Error: "method not allowed"})
+		return
+	}
+	var in AttestationRequest
+	if err := json.NewDecoder(req.Body).Decode(&in); err != nil {
+		writeJSON(w, http.StatusBadRequest, APIError{Error: err.Error(), Code: "REQ_001"})
+		return
+	}
+	out, err := r.svc.AddAttestation(in.ToDomain())
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, APIError{Error: err.Error(), Code: "ATT_001"})
+		return
+	}
+	writeJSON(w, http.StatusAccepted, out)
+}
+
+func (r *Router) proofExport(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, APIError{Error: "method not allowed"})
+		return
+	}
+	id := strings.TrimPrefix(req.URL.Path, "/v1/proof/")
+	bundle, err := r.svc.ExportProofBundle(id)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, APIError{Error: err.Error(), Code: "EVID_404"})
+		return
+	}
+	writeJSON(w, http.StatusOK, bundle)
+}
+
+func (r *Router) keyRotation(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, APIError{Error: "method not allowed"})
+		return
+	}
+	writeJSON(w, http.StatusOK, r.svc.GetKeyRotationMetadata())
+}
+
+func writeJSON(w http.ResponseWriter, status int, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(v)
+}

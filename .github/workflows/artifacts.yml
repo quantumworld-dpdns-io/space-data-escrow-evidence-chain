@@ -1,0 +1,27 @@
+name: Artifacts
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build-artifacts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.x'
+      - name: Build binary
+        run: |
+          mkdir -p artifacts
+          go build -o artifacts/evidence-api ./cmd/api
+      - name: Generate SBOM and provenance
+        run: |
+          bash scripts/release/generate_sbom.sh
+          bash scripts/release/generate_provenance.sh
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: evidence-api-artifacts
+          path: artifacts/
