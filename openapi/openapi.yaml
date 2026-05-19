@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Space Data Escrow Evidence Chain API
-  version: 0.1.0
+  version: 0.2.0
 servers:
   - url: http://localhost:8080
 paths:
@@ -17,6 +17,22 @@ paths:
       responses:
         '200':
           description: Ready
+  /version:
+    get:
+      summary: Build version metadata
+      responses:
+        '200':
+          description: Version details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VersionResponse'
+              examples:
+                sample:
+                  value:
+                    version: 0.2.0
+                    commit: abc123
+                    build_date: '2026-05-19'
   /v1/evidence:
     post:
       summary: Create evidence record
@@ -28,6 +44,14 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/CreateEvidenceRequest'
+            examples:
+              sample:
+                value:
+                  external_id: EXT-2026-001
+                  source: satellite-a
+                  type: imagery
+                  payload:
+                    file: image-001.tif
       responses:
         '201':
           description: Created
@@ -35,6 +59,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/EvidenceRecord'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
   /v1/evidence/{id}:
     get:
       summary: Get evidence record
@@ -53,8 +89,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/EvidenceRecord'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
         '404':
           description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
   /v1/custody:
     post:
       summary: Append custody event
@@ -69,6 +115,12 @@ paths:
       responses:
         '202':
           description: Accepted
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
   /v1/verify/{id}:
     post:
       summary: Verify evidence chain
@@ -89,6 +141,10 @@ paths:
                 $ref: '#/components/schemas/VerificationReport'
         '404':
           description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerificationReport'
   /v1/search:
     get:
       summary: Search evidence
@@ -120,12 +176,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  entries:
-                    type: array
-                    items:
-                      type: string
+                $ref: '#/components/schemas/AuditResponse'
 components:
   securitySchemes:
     ApiKeyAuth:
@@ -133,6 +184,27 @@ components:
       in: header
       name: X-API-Key
   schemas:
+    APIError:
+      type: object
+      properties:
+        error:
+          type: string
+        code:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+      required: [error]
+    VersionResponse:
+      type: object
+      properties:
+        version:
+          type: string
+        commit:
+          type: string
+        build_date:
+          type: string
+      required: [version, commit, build_date]
     CreateEvidenceRequest:
       type: object
       required: [external_id, source, type, payload]
@@ -197,3 +269,11 @@ components:
           format: date-time
         last_custody_actor:
           type: string
+    AuditResponse:
+      type: object
+      properties:
+        entries:
+          type: array
+          items:
+            type: string
+      required: [entries]
