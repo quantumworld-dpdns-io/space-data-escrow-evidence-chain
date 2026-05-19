@@ -15,7 +15,7 @@ func newTestRouter() *Router {
 	return NewRouter(
 		service.New(memory.NewEvidenceRepo(), memory.NewCustodyRepo(), memory.NewAuditRepo()),
 		"test-key",
-		map[string]string{"version": "test", "commit": "test", "build_date": "test"},
+		map[string]string{"version": "test", "commit": "abc123", "build_date": "2026-05-19"},
 	)
 }
 
@@ -26,6 +26,21 @@ func TestHealth(t *testing.T) {
 	r.Handler().ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200 got %d", w.Code)
+	}
+}
+
+func TestVersion(t *testing.T) {
+	r := newTestRouter()
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/version", nil)
+	r.Handler().ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 got %d", w.Code)
+	}
+	var body map[string]string
+	_ = json.Unmarshal(w.Body.Bytes(), &body)
+	if body["commit"] != "abc123" {
+		t.Fatalf("expected commit abc123 got %q", body["commit"])
 	}
 }
 
@@ -50,5 +65,32 @@ func TestCreateEvidence(t *testing.T) {
 	r.Handler().ServeHTTP(w, req)
 	if w.Code != http.StatusCreated {
 		t.Fatalf("expected 201 got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestCustodyAndVerifyNotFound(t *testing.T) {
+	r := newTestRouter()
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/v1/verify/not-exists", nil)
+	req.Header.Set("X-API-Key", "test-key")
+	r.Handler().ServeHTTP(w, req)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestAuditEndpoint(t *testing.T) {
+	r := newTestRouter()
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/v1/audit", nil)
+	req.Header.Set("X-API-Key", "test-key")
+	r.Handler().ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 got %d", w.Code)
+	}
+	var body AuditResponse
+	_ = json.Unmarshal(w.Body.Bytes(), &body)
+	if body.Entries == nil {
+		t.Fatal("expected entries array")
 	}
 }

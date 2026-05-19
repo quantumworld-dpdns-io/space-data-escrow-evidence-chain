@@ -34,3 +34,19 @@ func TestEvidenceLifecycle(t *testing.T) {
 		t.Fatalf("expected valid chain report: %+v", report)
 	}
 }
+
+func TestCreateEvidenceValidation(t *testing.T) {
+	svc := New(memory.NewEvidenceRepo(), memory.NewCustodyRepo(), memory.NewAuditRepo())
+	_, err := svc.CreateEvidence(CreateEvidenceInput{})
+	if err == nil {
+		t.Fatal("expected validation error")
+	}
+}
+
+func TestVerifyEvidenceNotFound(t *testing.T) {
+	svc := New(memory.NewEvidenceRepo(), memory.NewCustodyRepo(), memory.NewAuditRepo())
+	report := svc.VerifyEvidence("missing")
+	if report.FailureReason != "not_found" {
+		t.Fatalf("expected not_found, got %+v", report)
+	}
+}
