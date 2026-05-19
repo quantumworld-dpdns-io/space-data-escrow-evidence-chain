@@ -16,7 +16,7 @@ A02 Cryptographic Failures - Verify Missing Resource
 A03 Injection - Search Query Robustness
     Init Session
     ${headers}=    Auth Headers
-    ${resp}=    GET On Session    api    /v1/search?q=' OR '1'='1    headers=${headers}
+    ${resp}=    GET On Session    api    /v1/search    headers=    params=q=' OR '1'='1
     Should Be Equal As Integers    ${resp.status_code}    200
 
 A05 Security Misconfiguration - Health Endpoints Exposed but Safe
