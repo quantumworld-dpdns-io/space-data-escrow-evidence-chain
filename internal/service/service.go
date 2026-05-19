@@ -4,6 +4,9 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"sort"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/quantumworld-dpdns-io/space-data-escrow-evidence-chain/internal/domain"
@@ -16,10 +19,12 @@ type Service struct {
 	evidence repo.EvidenceRepository
 	custody  repo.CustodyRepository
 	audit    repo.AuditRepository
+	idemMu   sync.Mutex
+	idem     map[string]string
 }
 
 func New(e repo.EvidenceRepository, c repo.CustodyRepository, a repo.AuditRepository) *Service {
-	return &Service{evidence: e, custody: c, audit: a}
+	return &Service{evidence: e, custody: c, audit: a, idem: map[string]string{}}
 }
 
 type CreateEvidenceInput struct {
@@ -32,6 +37,11 @@ type CreateEvidenceInput struct {
 func (s *Service) CreateEvidence(input CreateEvidenceInput) (domain.EvidenceRecord, error) {
 	if input.ExternalID == "" || input.Source == "" || input.Type == "" {
 		return domain.EvidenceRecord{}, errors.New("external_id, source and type are required")
+	}
+	for _, existing := range s.evidence.List() {
+		if existing.ExternalID == input.ExternalID && existing.Source == input.Source && existing.Type == input.Type {
+			return domain.EvidenceRecord{}, errors.New("duplicate_evidence")
+		}
 	}
 	rec := domain.EvidenceRecord{
 		ID:         newID(),
@@ -47,6 +57,29 @@ func (s *Service) CreateEvidence(input CreateEvidenceInput) (domain.EvidenceReco
 	}
 	_ = s.audit.Add("evidence_created:" + rec.ID)
 	return rec, nil
+}
+
+func (s *Service) CreateEvidenceWithIdempotency(idempotencyKey string, input CreateEvidenceInput) (domain.EvidenceRecord, bool, error) {
+	if idempotencyKey == "" {
+		rec, err := s.CreateEvidence(input)
+		return rec, true, err
+	}
+
+	s.idemMu.Lock()
+	defer s.idemMu.Unlock()
+
+	if id, ok := s.idem[idempotencyKey]; ok {
+		if rec, found := s.evidence.Get(id); found {
+			return rec, false, nil
+		}
+	}
+
+	rec, err := s.CreateEvidence(input)
+	if err != nil {
+		return domain.EvidenceRecord{}, false, err
+	}
+	s.idem[idempotencyKey] = rec.ID
+	return rec, true, nil
 }
 
 func newID() string {
@@ -154,17 +187,59 @@ func (s *Service) VerifyEvidence(id string) domain.VerificationReport {
 }
 
 func (s *Service) SearchEvidence(q string) []domain.EvidenceRecord {
+	return s.ListEvidence(ListEvidenceQuery{Q: q, Page: 1, PageSize: 100, SortBy: "created_at", SortOrder: "desc"}).Items
+}
+
+type ListEvidenceResult struct {
+	Items    []domain.EvidenceRecord `json:"items"`
+	Page     int                     `json:"page"`
+	PageSize int                     `json:"page_size"`
+	Total    int                     `json:"total"`
+}
+
+func (s *Service) ListEvidence(query ListEvidenceQuery) ListEvidenceResult {
+	query.Normalize()
 	all := s.evidence.List()
-	if q == "" {
-		return all
-	}
-	results := make([]domain.EvidenceRecord, 0)
+	filtered := make([]domain.EvidenceRecord, 0, len(all))
 	for _, r := range all {
-		if r.ExternalID == q || r.Source == q || r.Type == q {
-			results = append(results, r)
+		if query.Q != "" && !(r.ExternalID == query.Q || r.Source == query.Q || r.Type == query.Q) {
+			continue
 		}
+		if query.Source != "" && !strings.EqualFold(r.Source, query.Source) {
+			continue
+		}
+		if query.Type != "" && !strings.EqualFold(r.Type, query.Type) {
+			continue
+		}
+		filtered = append(filtered, r)
 	}
-	return results
+
+	sort.Slice(filtered, func(i, j int) bool {
+		less := filtered[i].CreatedAt.Before(filtered[j].CreatedAt)
+		if query.SortBy == "external_id" {
+			less = filtered[i].ExternalID < filtered[j].ExternalID
+		}
+		if query.SortOrder == "asc" {
+			return less
+		}
+		return !less
+	})
+
+	total := len(filtered)
+	start := (query.Page - 1) * query.PageSize
+	if start > total {
+		start = total
+	}
+	end := start + query.PageSize
+	if end > total {
+		end = total
+	}
+	return ListEvidenceResult{
+		Items:    filtered[start:end],
+		Page:     query.Page,
+		PageSize: query.PageSize,
+		Total:    total,
+	}
 }
 
 func (s *Service) AuditEntries() []string { return s.audit.List() }
