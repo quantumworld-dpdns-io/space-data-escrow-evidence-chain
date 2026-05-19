@@ -70,15 +70,79 @@ func (s *Service) AppendCustody(event domain.CustodyEvent) error {
 }
 
 func (s *Service) VerifyEvidence(id string) domain.VerificationReport {
+	now := time.Now().UTC().Format(time.RFC3339)
 	rec, ok := s.evidence.Get(id)
 	if !ok {
-		return domain.VerificationReport{EvidenceID: id, FailureReason: "not_found", VerifiedAt: time.Now().UTC().Format(time.RFC3339)}
+		return domain.VerificationReport{EvidenceID: id, FailureReason: "not_found", VerifiedAt: now}
 	}
+
 	custody := s.custody.ListByEvidenceID(id)
+	if len(custody) == 0 {
+		return domain.VerificationReport{
+			EvidenceID:      id,
+			ChainValid:      false,
+			SignatureValid:  true,
+			IntegrityValid:  false,
+			FailureReason:   "missing_chain_or_custody",
+			VerifiedAt:      now,
+			CanonicalPayload: crypto.CanonicalizePayload(rec.Payload),
+		}
+	}
+
+	recomputed := crypto.HashPayload(rec.Payload)
+	if recomputed != rec.Hash {
+		return domain.VerificationReport{
+			EvidenceID:       id,
+			ChainValid:       false,
+			SignatureValid:   true,
+			IntegrityValid:   false,
+			FailureReason:    "hash_mismatch",
+			VerifiedAt:       now,
+			LastCustodyActor: custody[len(custody)-1].Actor,
+			CanonicalPayload: crypto.CanonicalizePayload(rec.Payload),
+		}
+	}
+
+	times := make([]time.Time, 0, len(custody))
+	for _, c := range custody {
+		if !chain.HasRequiredCustodyFields(c.Actor, c.Action) {
+			return domain.VerificationReport{
+				EvidenceID:       id,
+				ChainValid:       false,
+				SignatureValid:   true,
+				IntegrityValid:   false,
+				FailureReason:    "invalid_custody_event",
+				VerifiedAt:       now,
+				LastCustodyActor: custody[len(custody)-1].Actor,
+				CanonicalPayload: crypto.CanonicalizePayload(rec.Payload),
+			}
+		}
+		times = append(times, c.Timestamp)
+	}
+
+	if !chain.HasMonotonicCustodyTimestamps(times) {
+		return domain.VerificationReport{
+			EvidenceID:       id,
+			ChainValid:       false,
+			SignatureValid:   true,
+			IntegrityValid:   false,
+			FailureReason:    "non_monotonic_custody_time",
+			VerifiedAt:       now,
+			LastCustodyActor: custody[len(custody)-1].Actor,
+			CanonicalPayload: crypto.CanonicalizePayload(rec.Payload),
+		}
+	}
+
 	valid := chain.IsValidChain(rec.Hash, len(custody))
-	report := domain.VerificationReport{EvidenceID: id, ChainValid: valid, SignatureValid: true, IntegrityValid: valid, VerifiedAt: time.Now().UTC().Format(time.RFC3339)}
-	if len(custody) > 0 {
-		report.LastCustodyActor = custody[len(custody)-1].Actor
+	report := domain.VerificationReport{
+		EvidenceID:        id,
+		ChainValid:        valid,
+		SignatureValid:    true,
+		IntegrityValid:    valid,
+		VerifiedAt:        now,
+		LastCustodyActor:  custody[len(custody)-1].Actor,
+		CanonicalPayload:  crypto.CanonicalizePayload(rec.Payload),
+		ComputedHash:      recomputed,
 	}
 	if !valid {
 		report.FailureReason = "missing_chain_or_custody"
