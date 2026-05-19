@@ -21,17 +21,17 @@ import (
 )
 
 type Service struct {
-	evidence repo.EvidenceRepository
-	custody  repo.CustodyRepository
-	audit    repo.AuditRepository
-	idemMu   sync.Mutex
-	idem     map[string]string
-	qdrant   qdrant.Client
-	ollama   ollama.Client
-	jobs     *enrichment.Store
-	attMu    sync.RWMutex
-	att      map[string][]domain.Attestation
-	metrics  *telemetry.Registry
+	evidence  repo.EvidenceRepository
+	custody   repo.CustodyRepository
+	audit     repo.AuditRepository
+	idemMu    sync.Mutex
+	idem      map[string]string
+	qdrant    qdrant.Client
+	ollama    ollama.Client
+	jobs      *enrichment.Store
+	attMu     sync.RWMutex
+	att       map[string][]domain.Attestation
+	metrics   *telemetry.Registry
 	pqcSigner crypto.PQCSigner
 }
 
@@ -39,8 +39,8 @@ func New(e repo.EvidenceRepository, c repo.CustodyRepository, a repo.AuditReposi
 	return &Service{
 		evidence: e, custody: c, audit: a, idem: map[string]string{},
 		qdrant: qdrant.NewMemoryClient(), ollama: ollama.NewMemoryClient(), jobs: enrichment.NewStore(),
-		att:     map[string][]domain.Attestation{},
-		metrics: telemetry.NewRegistry(),
+		att:       map[string][]domain.Attestation{},
+		metrics:   telemetry.NewRegistry(),
 		pqcSigner: crypto.DilithiumSigner{},
 	}
 }

@@ -21,15 +21,15 @@ type CustodyEvent struct {
 }
 
 type Attestation struct {
-	EvidenceID          string    `json:"evidence_id"`
-	Signer              string    `json:"signer"`
-	Signature           string    `json:"signature"`
-	Algorithm           string    `json:"algorithm"`
-	Timestamp           time.Time `json:"timestamp"`
-	DualSign            bool      `json:"dual_sign,omitempty"`
-	ClassicalSignature  string    `json:"classical_signature,omitempty"`
-	PQCSignature        string    `json:"pqc_signature,omitempty"`
-	PQCAlgorithm        string    `json:"pqc_algorithm,omitempty"`
+	EvidenceID         string    `json:"evidence_id"`
+	Signer             string    `json:"signer"`
+	Signature          string    `json:"signature"`
+	Algorithm          string    `json:"algorithm"`
+	Timestamp          time.Time `json:"timestamp"`
+	DualSign           bool      `json:"dual_sign,omitempty"`
+	ClassicalSignature string    `json:"classical_signature,omitempty"`
+	PQCSignature       string    `json:"pqc_signature,omitempty"`
+	PQCAlgorithm       string    `json:"pqc_algorithm,omitempty"`
 }
 
 type VerificationReport struct {

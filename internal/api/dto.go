@@ -47,15 +47,15 @@ type EnrichmentJobResponse struct {
 }
 
 type AttestationRequest struct {
-	EvidenceID string `json:"evidence_id"`
-	Signer     string `json:"signer"`
-	Signature  string `json:"signature"`
-	Algorithm  string `json:"algorithm"`
-	Timestamp  string `json:"timestamp,omitempty"`
-	DualSign   bool   `json:"dual_sign,omitempty"`
+	EvidenceID         string `json:"evidence_id"`
+	Signer             string `json:"signer"`
+	Signature          string `json:"signature"`
+	Algorithm          string `json:"algorithm"`
+	Timestamp          string `json:"timestamp,omitempty"`
+	DualSign           bool   `json:"dual_sign,omitempty"`
 	ClassicalSignature string `json:"classical_signature,omitempty"`
-	PQCSignature string `json:"pqc_signature,omitempty"`
-	PQCAlgorithm string `json:"pqc_algorithm,omitempty"`
+	PQCSignature       string `json:"pqc_signature,omitempty"`
+	PQCAlgorithm       string `json:"pqc_algorithm,omitempty"`
 }
 
 func (r AttestationRequest) ToDomain() domain.Attestation {
@@ -67,14 +67,14 @@ func (r AttestationRequest) ToDomain() domain.Attestation {
 		}
 	}
 	return domain.Attestation{
-		EvidenceID: r.EvidenceID,
-		Signer:     r.Signer,
-		Signature:  r.Signature,
-		Algorithm:  r.Algorithm,
-		Timestamp:  ts,
-		DualSign:   r.DualSign,
+		EvidenceID:         r.EvidenceID,
+		Signer:             r.Signer,
+		Signature:          r.Signature,
+		Algorithm:          r.Algorithm,
+		Timestamp:          ts,
+		DualSign:           r.DualSign,
 		ClassicalSignature: r.ClassicalSignature,
-		PQCSignature: r.PQCSignature,
-		PQCAlgorithm: r.PQCAlgorithm,
+		PQCSignature:       r.PQCSignature,
+		PQCAlgorithm:       r.PQCAlgorithm,
 	}
 }
