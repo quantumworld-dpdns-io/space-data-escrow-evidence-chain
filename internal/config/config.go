@@ -12,6 +12,9 @@ type Config struct {
 	WriteTimeout   time.Duration
 	APIKey         string
 	ShutdownTimout time.Duration
+	Version        string
+	Commit         string
+	BuildDate      string
 }
 
 func Load() Config {
@@ -21,6 +24,9 @@ func Load() Config {
 		WriteTimeout:   getDuration("APP_WRITE_TIMEOUT_SEC", 10),
 		APIKey:         getEnv("APP_API_KEY", "dev-api-key"),
 		ShutdownTimout: getDuration("APP_SHUTDOWN_TIMEOUT_SEC", 10),
+		Version:        getEnv("APP_VERSION", "0.1.0"),
+		Commit:         getEnv("APP_COMMIT", "dev"),
+		BuildDate:      getEnv("APP_BUILD_DATE", "unknown"),
 	}
 }
 
