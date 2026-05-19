@@ -13,9 +13,22 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.24.x'
-      - run: go list -m all
+      - name: Dependency graph
+        run: go list -m all
 
-  owasp-robot:
+  go-vulncheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.x'
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+      - name: Run govulncheck
+        run: govulncheck ./...
+
+  secrets-and-owasp:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -25,9 +38,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Basic secret-pattern scan
+        run: |
+          ! rg -n "(AKIA[0-9A-Z]{16}|BEGIN PRIVATE KEY|password\s*=\s*['\"])" .
       - run: pip install robotframework robotframework-requests
       - name: Start API
         run: |
           APP_API_KEY=dev-api-key go run ./cmd/api &
           sleep 5
-      - run: robot tests/robot/owasp
+      - name: Run OWASP robot suite
+        run: robot tests/robot/owasp
