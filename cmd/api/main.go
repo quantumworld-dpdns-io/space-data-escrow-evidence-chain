@@ -19,13 +19,7 @@ func main() {
 	svc := service.New(memory.NewEvidenceRepo(), memory.NewCustodyRepo(), memory.NewAuditRepo())
 	r := api.NewRouter(svc, cfg.APIKey)
 
-	srv := &http.Server{
-		Addr:         ":" + cfg.Port,
-		Handler:      r,
-		ReadTimeout:  cfg.ReadTimeout,
-		WriteTimeout: cfg.WriteTimeout,
-	}
-
+	srv := &http.Server{Addr: ":" + cfg.Port, Handler: r.Handler(), ReadTimeout: cfg.ReadTimeout, WriteTimeout: cfg.WriteTimeout}
 	go func() {
 		log.Printf("starting API server on :%s", cfg.Port)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -36,10 +30,7 @@ func main() {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGTERM, syscall.SIGINT)
 	<-quit
-
 	ctx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimout)
 	defer cancel()
-	if err := srv.Shutdown(ctx); err != nil {
-		log.Printf("shutdown error: %v", err)
-	}
+	_ = srv.Shutdown(ctx)
 }
