@@ -1,0 +1,21 @@
+name: Release Readiness
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  docs-and-policy-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate v1 runbook bundle
+        run: bash scripts/release/validate_v1_docs.sh
+      - name: Validate key security assets
+        run: |
+          test -f security/events/runtime_event_schema.json
+          test -f security/tetragon/policy-suspicious-exec.yaml
+          test -f security/tetragon/policy-egress-anomaly.yaml
+      - name: Validate MCP manifest
+        run: test -f mcp/manifest.json
