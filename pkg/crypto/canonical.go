@@ -1,0 +1,20 @@
+package crypto
+
+import (
+	"sort"
+	"strings"
+)
+
+func CanonicalizePayload(payload map[string]string) string {
+	keys := make([]string, 0, len(payload))
+	for k := range payload {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	parts := make([]string, 0, len(keys))
+	for _, k := range keys {
+		parts = append(parts, k+"="+payload[k])
+	}
+	return strings.Join(parts, "&")
+}
