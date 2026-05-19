@@ -28,7 +28,18 @@ jobs:
       - name: Run govulncheck
         run: govulncheck ./...
 
-  secrets-and-owasp:
+  runtime-security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate runtime event schema exists
+        run: test -f security/events/runtime_event_schema.json
+      - name: Validate tetragon policies exist
+        run: |
+          test -f security/tetragon/policy-suspicious-exec.yaml
+          test -f security/tetragon/policy-egress-anomaly.yaml
+
+  secrets-and-dast-owasp:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -46,5 +57,7 @@ jobs:
         run: |
           APP_API_KEY=dev-api-key go run ./cmd/api &
           sleep 5
+      - name: Run DAST-lite script
+        run: API_KEY=dev-api-key bash scripts/security/dast_lite.sh http://localhost:8080
       - name: Run OWASP robot suite
         run: robot tests/robot/owasp
