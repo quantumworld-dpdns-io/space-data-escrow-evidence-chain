@@ -11,8 +11,16 @@ import (
 	"github.com/quantumworld-dpdns-io/space-data-escrow-evidence-chain/internal/service"
 )
 
+func newTestRouter() *Router {
+	return NewRouter(
+		service.New(memory.NewEvidenceRepo(), memory.NewCustodyRepo(), memory.NewAuditRepo()),
+		"test-key",
+		map[string]string{"version": "test", "commit": "test", "build_date": "test"},
+	)
+}
+
 func TestHealth(t *testing.T) {
-	r := NewRouter(service.New(memory.NewEvidenceRepo(), memory.NewCustodyRepo(), memory.NewAuditRepo()), "test-key")
+	r := newTestRouter()
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest(http.MethodGet, "/healthz", nil)
 	r.Handler().ServeHTTP(w, req)
@@ -22,7 +30,7 @@ func TestHealth(t *testing.T) {
 }
 
 func TestAuthRequired(t *testing.T) {
-	r := NewRouter(service.New(memory.NewEvidenceRepo(), memory.NewCustodyRepo(), memory.NewAuditRepo()), "test-key")
+	r := newTestRouter()
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest(http.MethodGet, "/v1/search", nil)
 	r.Handler().ServeHTTP(w, req)
@@ -32,7 +40,7 @@ func TestAuthRequired(t *testing.T) {
 }
 
 func TestCreateEvidence(t *testing.T) {
-	r := NewRouter(service.New(memory.NewEvidenceRepo(), memory.NewCustodyRepo(), memory.NewAuditRepo()), "test-key")
+	r := newTestRouter()
 	payload := map[string]any{"external_id": "EXT-2", "source": "sat-b", "type": "telemetry", "payload": map[string]string{"k": "v"}}
 	b, _ := json.Marshal(payload)
 	w := httptest.NewRecorder()
