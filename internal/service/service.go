@@ -1,10 +1,11 @@
 package service
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/quantumworld-dpdns-io/space-data-escrow-evidence-chain/internal/domain"
 	"github.com/quantumworld-dpdns-io/space-data-escrow-evidence-chain/internal/repo"
 	"github.com/quantumworld-dpdns-io/space-data-escrow-evidence-chain/pkg/chain"
@@ -33,7 +34,7 @@ func (s *Service) CreateEvidence(input CreateEvidenceInput) (domain.EvidenceReco
 		return domain.EvidenceRecord{}, errors.New("external_id, source and type are required")
 	}
 	rec := domain.EvidenceRecord{
-		ID:         uuid.NewString(),
+		ID:         newID(),
 		ExternalID: input.ExternalID,
 		Source:     input.Source,
 		Type:       input.Type,
@@ -48,9 +49,13 @@ func (s *Service) CreateEvidence(input CreateEvidenceInput) (domain.EvidenceReco
 	return rec, nil
 }
 
-func (s *Service) GetEvidence(id string) (domain.EvidenceRecord, bool) {
-	return s.evidence.Get(id)
+func newID() string {
+	b := make([]byte, 16)
+	_, _ = rand.Read(b)
+	return hex.EncodeToString(b)
 }
+
+func (s *Service) GetEvidence(id string) (domain.EvidenceRecord, bool) { return s.evidence.Get(id) }
 
 func (s *Service) AppendCustody(event domain.CustodyEvent) error {
 	if event.EvidenceID == "" || event.Actor == "" || event.Action == "" {
@@ -71,13 +76,7 @@ func (s *Service) VerifyEvidence(id string) domain.VerificationReport {
 	}
 	custody := s.custody.ListByEvidenceID(id)
 	valid := chain.IsValidChain(rec.Hash, len(custody))
-	report := domain.VerificationReport{
-		EvidenceID:     id,
-		ChainValid:     valid,
-		SignatureValid: true,
-		IntegrityValid: valid,
-		VerifiedAt:     time.Now().UTC().Format(time.RFC3339),
-	}
+	report := domain.VerificationReport{EvidenceID: id, ChainValid: valid, SignatureValid: true, IntegrityValid: valid, VerifiedAt: time.Now().UTC().Format(time.RFC3339)}
 	if len(custody) > 0 {
 		report.LastCustodyActor = custody[len(custody)-1].Actor
 	}
@@ -102,6 +101,4 @@ func (s *Service) SearchEvidence(q string) []domain.EvidenceRecord {
 	return results
 }
 
-func (s *Service) AuditEntries() []string {
-	return s.audit.List()
-}
+func (s *Service) AuditEntries() []string { return s.audit.List() }
