@@ -13,6 +13,7 @@ import (
 	"github.com/quantumworld-dpdns-io/space-data-escrow-evidence-chain/internal/middleware"
 	"github.com/quantumworld-dpdns-io/space-data-escrow-evidence-chain/internal/repo/memory"
 	"github.com/quantumworld-dpdns-io/space-data-escrow-evidence-chain/internal/service"
+	"github.com/quantumworld-dpdns-io/space-data-escrow-evidence-chain/internal/telemetry"
 )
 
 func main() {
@@ -23,6 +24,7 @@ func main() {
 		"commit":     cfg.Commit,
 		"build_date": cfg.BuildDate,
 	})
+	reg := telemetry.NewRegistry()
 
 	handler := middleware.Chain(
 		r.Handler(),
@@ -30,6 +32,7 @@ func main() {
 		middleware.Recover(),
 		middleware.CORS(),
 		middleware.Timeout(cfg.ReadTimeout),
+		telemetry.HTTPMetrics(reg),
 	)
 
 	srv := &http.Server{Addr: ":" + cfg.Port, Handler: handler, ReadTimeout: cfg.ReadTimeout, WriteTimeout: cfg.WriteTimeout}
