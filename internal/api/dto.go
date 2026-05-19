@@ -27,3 +27,17 @@ type ListEvidenceResponse struct {
 	PageSize int                     `json:"page_size"`
 	Total    int                     `json:"total"`
 }
+
+type TriggerEnrichmentRequest struct {
+	EvidenceID string `json:"evidence_id"`
+}
+
+type EnrichmentJobResponse struct {
+	ID         string            `json:"id"`
+	EvidenceID string            `json:"evidence_id"`
+	Status     string            `json:"status"`
+	Output     map[string]string `json:"output,omitempty"`
+	Error      string            `json:"error,omitempty"`
+	CreatedAt  string            `json:"created_at"`
+	UpdatedAt  string            `json:"updated_at"`
+}
