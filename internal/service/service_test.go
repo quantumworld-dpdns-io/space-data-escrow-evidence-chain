@@ -1,6 +1,7 @@
 package service
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -40,6 +41,31 @@ func TestCreateEvidenceValidation(t *testing.T) {
 	_, err := svc.CreateEvidence(CreateEvidenceInput{})
 	if err == nil {
 		t.Fatal("expected validation error")
+	}
+}
+
+func TestDuplicateEvidenceValidation(t *testing.T) {
+	svc := New(memory.NewEvidenceRepo(), memory.NewCustodyRepo(), memory.NewAuditRepo())
+	_, _ = svc.CreateEvidence(CreateEvidenceInput{ExternalID: "EXT-D", Source: "sat", Type: "img", Payload: map[string]string{"k": "v"}})
+	_, err := svc.CreateEvidence(CreateEvidenceInput{ExternalID: "EXT-D", Source: "sat", Type: "img", Payload: map[string]string{"k": "v2"}})
+	if err == nil || err.Error() != "duplicate_evidence" {
+		t.Fatalf("expected duplicate_evidence, got %v", err)
+	}
+}
+
+func TestCreateEvidenceIdempotent(t *testing.T) {
+	svc := New(memory.NewEvidenceRepo(), memory.NewCustodyRepo(), memory.NewAuditRepo())
+	in := CreateEvidenceInput{ExternalID: "EXT-I", Source: "sat", Type: "img", Payload: map[string]string{"k": "v"}}
+	first, created1, err1 := svc.CreateEvidenceWithIdempotency("idem-k", in)
+	if err1 != nil || !created1 {
+		t.Fatalf("first create failed: created=%v err=%v", created1, err1)
+	}
+	second, created2, err2 := svc.CreateEvidenceWithIdempotency("idem-k", in)
+	if err2 != nil || created2 {
+		t.Fatalf("second create expected replay: created=%v err=%v", created2, err2)
+	}
+	if first.ID != second.ID {
+		t.Fatalf("expected same evidence id for idempotent replay: %s vs %s", first.ID, second.ID)
 	}
 }
 
@@ -93,5 +119,24 @@ func TestVerifyEvidenceNonMonotonicCustody(t *testing.T) {
 	report := svc.VerifyEvidence(rec.ID)
 	if report.FailureReason != "non_monotonic_custody_time" {
 		t.Fatalf("expected non_monotonic_custody_time, got %+v", report)
+	}
+}
+
+func TestListEvidencePaginationAndFilters(t *testing.T) {
+	svc := New(memory.NewEvidenceRepo(), memory.NewCustodyRepo(), memory.NewAuditRepo())
+	for i := 0; i < 5; i++ {
+		_, err := svc.CreateEvidence(CreateEvidenceInput{
+			ExternalID: fmt.Sprintf("EXT-%d", i),
+			Source:     "sat-z",
+			Type:       "imagery",
+			Payload:    map[string]string{"k": "v"},
+		})
+		if err != nil {
+			t.Fatalf("seed create failed: %v", err)
+		}
+	}
+	res := svc.ListEvidence(ListEvidenceQuery{Source: "sat-z", Page: 2, PageSize: 2, SortOrder: "asc"})
+	if res.Total < 5 || len(res.Items) != 2 || res.Page != 2 {
+		t.Fatalf("unexpected list result: %+v", res)
 	}
 }
