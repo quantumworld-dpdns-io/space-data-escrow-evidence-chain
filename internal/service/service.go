@@ -81,12 +81,12 @@ func (s *Service) VerifyEvidence(id string) domain.VerificationReport {
 	custody := s.custody.ListByEvidenceID(id)
 	if len(custody) == 0 {
 		return domain.VerificationReport{
-			EvidenceID:      id,
-			ChainValid:      false,
-			SignatureValid:  true,
-			IntegrityValid:  false,
-			FailureReason:   "missing_chain_or_custody",
-			VerifiedAt:      now,
+			EvidenceID:       id,
+			ChainValid:       false,
+			SignatureValid:   true,
+			IntegrityValid:   false,
+			FailureReason:    "missing_chain_or_custody",
+			VerifiedAt:       now,
 			CanonicalPayload: crypto.CanonicalizePayload(rec.Payload),
 		}
 	}
@@ -137,14 +137,14 @@ func (s *Service) VerifyEvidence(id string) domain.VerificationReport {
 
 	valid := chain.IsValidChain(rec.Hash, len(custody))
 	report := domain.VerificationReport{
-		EvidenceID:        id,
-		ChainValid:        valid,
-		SignatureValid:    true,
-		IntegrityValid:    valid,
-		VerifiedAt:        now,
-		LastCustodyActor:  custody[len(custody)-1].Actor,
-		CanonicalPayload:  crypto.CanonicalizePayload(rec.Payload),
-		ComputedHash:      recomputed,
+		EvidenceID:       id,
+		ChainValid:       valid,
+		SignatureValid:   true,
+		IntegrityValid:   valid,
+		VerifiedAt:       now,
+		LastCustodyActor: custody[len(custody)-1].Actor,
+		CanonicalPayload: crypto.CanonicalizePayload(rec.Payload),
+		ComputedHash:     recomputed,
 	}
 	if !valid {
 		report.FailureReason = "missing_chain_or_custody"
