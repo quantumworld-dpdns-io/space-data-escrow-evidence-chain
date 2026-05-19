@@ -15,6 +15,7 @@ import (
 	"github.com/quantumworld-dpdns-io/space-data-escrow-evidence-chain/internal/integrations/qdrant"
 	"github.com/quantumworld-dpdns-io/space-data-escrow-evidence-chain/internal/repo"
 	"github.com/quantumworld-dpdns-io/space-data-escrow-evidence-chain/internal/service/enrichment"
+	"github.com/quantumworld-dpdns-io/space-data-escrow-evidence-chain/internal/telemetry"
 	"github.com/quantumworld-dpdns-io/space-data-escrow-evidence-chain/pkg/chain"
 	"github.com/quantumworld-dpdns-io/space-data-escrow-evidence-chain/pkg/crypto"
 )
@@ -30,6 +31,7 @@ type Service struct {
 	jobs     *enrichment.Store
 	attMu    sync.RWMutex
 	att      map[string][]domain.Attestation
+	metrics  *telemetry.Registry
 }
 
 func New(e repo.EvidenceRepository, c repo.CustodyRepository, a repo.AuditRepository) *Service {
@@ -37,6 +39,7 @@ func New(e repo.EvidenceRepository, c repo.CustodyRepository, a repo.AuditReposi
 		evidence: e, custody: c, audit: a, idem: map[string]string{},
 		qdrant: qdrant.NewMemoryClient(), ollama: ollama.NewMemoryClient(), jobs: enrichment.NewStore(),
 		att: map[string][]domain.Attestation{},
+		metrics: telemetry.NewRegistry(),
 	}
 }
 
@@ -68,6 +71,7 @@ func (s *Service) CreateEvidence(input CreateEvidenceInput) (domain.EvidenceReco
 	if err := s.evidence.Create(rec); err != nil {
 		return domain.EvidenceRecord{}, err
 	}
+	s.metrics.Inc("evidence.created")
 	_ = s.qdrant.Upsert(context.Background(), rec.ID, rec.Payload)
 	_ = s.audit.Add("evidence_created:" + rec.ID)
 	return rec, nil
@@ -114,6 +118,7 @@ func (s *Service) AppendCustody(event domain.CustodyEvent) error {
 	if err := s.custody.Append(event); err != nil {
 		return err
 	}
+	s.metrics.Inc("custody.appended")
 	_ = s.audit.Add("custody_appended:" + event.EvidenceID)
 	return nil
 }
@@ -122,11 +127,13 @@ func (s *Service) VerifyEvidence(id string) domain.VerificationReport {
 	now := time.Now().UTC().Format(time.RFC3339)
 	rec, ok := s.evidence.Get(id)
 	if !ok {
+		s.metrics.Inc("verify.not_found")
 		return domain.VerificationReport{EvidenceID: id, FailureReason: "not_found", VerifiedAt: now}
 	}
 
 	custody := s.custody.ListByEvidenceID(id)
 	if len(custody) == 0 {
+		s.metrics.Inc("verify.missing_custody")
 		return domain.VerificationReport{
 			EvidenceID:       id,
 			ChainValid:       false,
@@ -140,6 +147,7 @@ func (s *Service) VerifyEvidence(id string) domain.VerificationReport {
 
 	recomputed := crypto.HashPayload(rec.Payload)
 	if recomputed != rec.Hash {
+		s.metrics.Inc("verify.hash_mismatch")
 		return domain.VerificationReport{
 			EvidenceID:       id,
 			ChainValid:       false,
@@ -170,6 +178,7 @@ func (s *Service) VerifyEvidence(id string) domain.VerificationReport {
 	}
 
 	if !chain.HasMonotonicCustodyTimestamps(times) {
+		s.metrics.Inc("verify.non_monotonic_custody")
 		return domain.VerificationReport{
 			EvidenceID:       id,
 			ChainValid:       false,
@@ -196,6 +205,7 @@ func (s *Service) VerifyEvidence(id string) domain.VerificationReport {
 	if !valid {
 		report.FailureReason = "missing_chain_or_custody"
 	}
+	s.metrics.Inc("verify.ok")
 	_ = s.audit.Add("evidence_verified:" + id)
 	return report
 }
