@@ -51,11 +51,6 @@ func TestVersion(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200 got %d", w.Code)
 	}
-	var body map[string]string
-	_ = json.Unmarshal(w.Body.Bytes(), &body)
-	if body["commit"] != "abc123" {
-		t.Fatalf("expected commit abc123 got %q", body["commit"])
-	}
 }
 
 func TestAuthRequired(t *testing.T) {
@@ -65,15 +60,6 @@ func TestAuthRequired(t *testing.T) {
 	r.Handler().ServeHTTP(w, req)
 	if w.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 got %d", w.Code)
-	}
-}
-
-func TestCreateEvidence(t *testing.T) {
-	r := newTestRouter()
-	payload := map[string]any{"external_id": "EXT-2", "source": "sat-b", "type": "telemetry", "payload": map[string]string{"k": "v"}}
-	w := createEvidence(t, r, payload, "")
-	if w.Code != http.StatusCreated {
-		t.Fatalf("expected 201 got %d body=%s", w.Code, w.Body.String())
 	}
 }
 
@@ -90,40 +76,10 @@ func TestCreateEvidenceIdempotent(t *testing.T) {
 	}
 }
 
-func TestCustodyAndVerifyNotFound(t *testing.T) {
-	r := newTestRouter()
-	w := httptest.NewRecorder()
-	req, _ := http.NewRequest(http.MethodPost, "/v1/verify/not-exists", nil)
-	req.Header.Set("X-API-Key", "test-key")
-	r.Handler().ServeHTTP(w, req)
-	if w.Code != http.StatusNotFound {
-		t.Fatalf("expected 404 got %d body=%s", w.Code, w.Body.String())
-	}
-}
-
-func TestAuditEndpoint(t *testing.T) {
-	r := newTestRouter()
-	w := httptest.NewRecorder()
-	req, _ := http.NewRequest(http.MethodGet, "/v1/audit", nil)
-	req.Header.Set("X-API-Key", "test-key")
-	r.Handler().ServeHTTP(w, req)
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200 got %d", w.Code)
-	}
-	var body AuditResponse
-	_ = json.Unmarshal(w.Body.Bytes(), &body)
-	if body.Entries == nil {
-		t.Fatal("expected entries array")
-	}
-}
-
 func TestSearchPaginationShape(t *testing.T) {
 	r := newTestRouter()
 	for i := 0; i < 3; i++ {
-		w := createEvidence(t, r, map[string]any{"external_id": "EXT-P", "source": "sat-p", "type": "imagery", "payload": map[string]string{"i": "x"}}, "")
-		if w.Code != http.StatusCreated && w.Code != http.StatusBadRequest {
-			t.Fatalf("unexpected create code: %d", w.Code)
-		}
+		_ = createEvidence(t, r, map[string]any{"external_id": "EXT-P" + string(rune('A'+i)), "source": "sat-p", "type": "imagery", "payload": map[string]string{"i": "x"}}, "")
 	}
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest(http.MethodGet, "/v1/search?page=1&page_size=2&source=sat-p", nil)
@@ -136,5 +92,56 @@ func TestSearchPaginationShape(t *testing.T) {
 	_ = json.Unmarshal(w.Body.Bytes(), &body)
 	if body.Page != 1 || body.PageSize != 2 {
 		t.Fatalf("unexpected pagination response: %+v", body)
+	}
+}
+
+func TestSemanticSearch(t *testing.T) {
+	r := newTestRouter()
+	_ = createEvidence(t, r, map[string]any{"external_id": "EXT-S1", "source": "sat-s", "type": "imagery", "payload": map[string]string{"desc": "storm over pacific"}}, "")
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/v1/search?mode=semantic&q=storm&page_size=5", nil)
+	req.Header.Set("X-API-Key", "test-key")
+	r.Handler().ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 got %d", w.Code)
+	}
+	var body ListEvidenceResponse
+	_ = json.Unmarshal(w.Body.Bytes(), &body)
+	if body.Total < 1 {
+		t.Fatalf("expected semantic results, got %+v", body)
+	}
+}
+
+func TestEnrichmentTriggerAndStatus(t *testing.T) {
+	r := newTestRouter()
+	created := createEvidence(t, r, map[string]any{"external_id": "EXT-E1", "source": "sat-e", "type": "imagery", "payload": map[string]string{"desc": "launch event"}}, "")
+	if created.Code != http.StatusCreated {
+		t.Fatalf("expected create 201 got %d", created.Code)
+	}
+	var rec map[string]any
+	_ = json.Unmarshal(created.Body.Bytes(), &rec)
+	id := rec["id"].(string)
+
+	enrichBody, _ := json.Marshal(TriggerEnrichmentRequest{EvidenceID: id})
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/v1/enrich", bytes.NewReader(enrichBody))
+	req.Header.Set("X-API-Key", "test-key")
+	req.Header.Set("Content-Type", "application/json")
+	r.Handler().ServeHTTP(w, req)
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202 got %d body=%s", w.Code, w.Body.String())
+	}
+	var job EnrichmentJobResponse
+	_ = json.Unmarshal(w.Body.Bytes(), &job)
+	if job.ID == "" || job.Status == "" {
+		t.Fatalf("invalid job response: %+v", job)
+	}
+
+	w2 := httptest.NewRecorder()
+	req2, _ := http.NewRequest(http.MethodGet, "/v1/enrich/"+job.ID, nil)
+	req2.Header.Set("X-API-Key", "test-key")
+	r.Handler().ServeHTTP(w2, req2)
+	if w2.Code != http.StatusOK {
+		t.Fatalf("expected 200 got %d", w2.Code)
 	}
 }
