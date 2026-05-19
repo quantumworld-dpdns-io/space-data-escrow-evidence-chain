@@ -72,9 +72,13 @@ func (r *Router) evidenceCreate(w http.ResponseWriter, req *http.Request) {
 		writeJSON(w, http.StatusBadRequest, APIError{Error: err.Error(), Code: "REQ_001"})
 		return
 	}
-	rec, err := r.svc.CreateEvidence(service.CreateEvidenceInput(in))
+	rec, created, err := r.svc.CreateEvidenceWithIdempotency(req.Header.Get("Idempotency-Key"), service.CreateEvidenceInput(in))
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, APIError{Error: err.Error(), Code: "VAL_001"})
+		return
+	}
+	if !created {
+		writeJSON(w, http.StatusOK, CreateEvidenceResponse(rec))
 		return
 	}
 	writeJSON(w, http.StatusCreated, CreateEvidenceResponse(rec))
@@ -130,7 +134,22 @@ func (r *Router) search(w http.ResponseWriter, req *http.Request) {
 		writeJSON(w, http.StatusMethodNotAllowed, APIError{Error: "method not allowed"})
 		return
 	}
-	writeJSON(w, http.StatusOK, r.svc.SearchEvidence(req.URL.Query().Get("q")))
+	query := ParseListEvidenceQuery(
+		req.URL.Query().Get("page"),
+		req.URL.Query().Get("page_size"),
+		req.URL.Query().Get("q"),
+		req.URL.Query().Get("source"),
+		req.URL.Query().Get("type"),
+		req.URL.Query().Get("sort_by"),
+		req.URL.Query().Get("sort_order"),
+	)
+	result := r.svc.ListEvidence(query)
+	writeJSON(w, http.StatusOK, ListEvidenceResponse{
+		Items:    result.Items,
+		Page:     result.Page,
+		PageSize: result.PageSize,
+		Total:    result.Total,
+	})
 }
 
 func (r *Router) audit(w http.ResponseWriter, req *http.Request) {
