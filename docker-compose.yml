@@ -1,0 +1,11 @@
+version: '3.9'
+services:
+  evidence-api:
+    build: .
+    container_name: evidence-api
+    environment:
+      APP_PORT: "8080"
+      APP_API_KEY: "dev-api-key"
+      APP_VERSION: "dev"
+    ports:
+      - "8080:8080"
