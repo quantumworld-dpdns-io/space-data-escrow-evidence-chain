@@ -3,7 +3,7 @@ Resource    ../resources/common.resource
 
 *** Test Cases ***
 Evidence Lifecycle Happy Path
-    Create Session
+    Init Session
     ${headers}=    Auth Headers
     ${create_body}=    Set Variable    {"external_id":"EXT-R1","source":"sat-r","type":"imagery","payload":{"file":"r1.tif"}}
     ${create_resp}=    POST On Session    api    /v1/evidence    data=${create_body}    headers=${headers}

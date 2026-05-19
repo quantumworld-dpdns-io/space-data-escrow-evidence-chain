@@ -7,8 +7,9 @@ ${BASE_URL}    %{BASE_URL=http://localhost:8080}
 ${API_KEY}     %{API_KEY=dev-api-key}
 
 *** Keywords ***
-Create Session
-    Create Session    api    ${BASE_URL}
+Init Session
+    RequestsLibrary.Create Session    api    ${BASE_URL}
 
 Auth Headers
-    [Return]    {"X-API-Key": "${API_KEY}", "Content-Type": "application/json"}
+    ${headers}=    Create Dictionary    X-API-Key=${API_KEY}    Content-Type=application/json
+    RETURN    ${headers}
