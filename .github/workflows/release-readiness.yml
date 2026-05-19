@@ -12,6 +12,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Validate v1 runbook bundle
         run: bash scripts/release/validate_v1_docs.sh
+      - name: Validate v1 launch dossier
+        run: bash scripts/release/validate_v1_dossier.sh
       - name: Validate key security assets
         run: |
           test -f security/events/runtime_event_schema.json
