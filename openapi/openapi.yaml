@@ -175,6 +175,12 @@ paths:
           required: false
           schema:
             type: string
+        - in: query
+          name: mode
+          required: false
+          schema:
+            type: string
+            enum: [default, semantic]
       responses:
         '200':
           description: Search results
@@ -182,6 +188,54 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ListEvidenceResponse'
+  /v1/enrich:
+    post:
+      summary: Trigger evidence enrichment job
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TriggerEnrichmentRequest'
+      responses:
+        '202':
+          description: Job accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnrichmentJobResponse'
+        '404':
+          description: Evidence not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+  /v1/enrich/{job_id}:
+    get:
+      summary: Get enrichment job status
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: path
+          name: job_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Job status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnrichmentJobResponse'
+        '404':
+          description: Job not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
   /v1/audit:
     get:
       summary: Get audit entries
@@ -315,3 +369,31 @@ components:
         total:
           type: integer
       required: [items, page, page_size, total]
+    TriggerEnrichmentRequest:
+      type: object
+      required: [evidence_id]
+      properties:
+        evidence_id:
+          type: string
+    EnrichmentJobResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        evidence_id:
+          type: string
+        status:
+          type: string
+        output:
+          type: object
+          additionalProperties:
+            type: string
+        error:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required: [id, evidence_id, status, created_at, updated_at]
