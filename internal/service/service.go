@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
@@ -10,7 +11,10 @@ import (
 	"time"
 
 	"github.com/quantumworld-dpdns-io/space-data-escrow-evidence-chain/internal/domain"
+	"github.com/quantumworld-dpdns-io/space-data-escrow-evidence-chain/internal/integrations/ollama"
+	"github.com/quantumworld-dpdns-io/space-data-escrow-evidence-chain/internal/integrations/qdrant"
 	"github.com/quantumworld-dpdns-io/space-data-escrow-evidence-chain/internal/repo"
+	"github.com/quantumworld-dpdns-io/space-data-escrow-evidence-chain/internal/service/enrichment"
 	"github.com/quantumworld-dpdns-io/space-data-escrow-evidence-chain/pkg/chain"
 	"github.com/quantumworld-dpdns-io/space-data-escrow-evidence-chain/pkg/crypto"
 )
@@ -21,10 +25,16 @@ type Service struct {
 	audit    repo.AuditRepository
 	idemMu   sync.Mutex
 	idem     map[string]string
+	qdrant   qdrant.Client
+	ollama   ollama.Client
+	jobs     *enrichment.Store
 }
 
 func New(e repo.EvidenceRepository, c repo.CustodyRepository, a repo.AuditRepository) *Service {
-	return &Service{evidence: e, custody: c, audit: a, idem: map[string]string{}}
+	return &Service{
+		evidence: e, custody: c, audit: a, idem: map[string]string{},
+		qdrant: qdrant.NewMemoryClient(), ollama: ollama.NewMemoryClient(), jobs: enrichment.NewStore(),
+	}
 }
 
 type CreateEvidenceInput struct {
@@ -55,6 +65,7 @@ func (s *Service) CreateEvidence(input CreateEvidenceInput) (domain.EvidenceReco
 	if err := s.evidence.Create(rec); err != nil {
 		return domain.EvidenceRecord{}, err
 	}
+	_ = s.qdrant.Upsert(context.Background(), rec.ID, rec.Payload)
 	_ = s.audit.Add("evidence_created:" + rec.ID)
 	return rec, nil
 }
@@ -190,6 +201,20 @@ func (s *Service) SearchEvidence(q string) []domain.EvidenceRecord {
 	return s.ListEvidence(ListEvidenceQuery{Q: q, Page: 1, PageSize: 100, SortBy: "created_at", SortOrder: "desc"}).Items
 }
 
+func (s *Service) SemanticSearch(query string, limit int) ([]domain.EvidenceRecord, error) {
+	found, err := s.qdrant.Search(context.Background(), query, limit)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]domain.EvidenceRecord, 0, len(found))
+	for _, hit := range found {
+		if rec, ok := s.evidence.Get(hit.ID); ok {
+			out = append(out, rec)
+		}
+	}
+	return out, nil
+}
+
 type ListEvidenceResult struct {
 	Items    []domain.EvidenceRecord `json:"items"`
 	Page     int                     `json:"page"`
@@ -243,3 +268,37 @@ func (s *Service) ListEvidence(query ListEvidenceQuery) ListEvidenceResult {
 }
 
 func (s *Service) AuditEntries() []string { return s.audit.List() }
+
+func (s *Service) TriggerEnrichment(evidenceID string) (enrichment.Job, error) {
+	rec, ok := s.evidence.Get(evidenceID)
+	if !ok {
+		return enrichment.Job{}, errors.New("evidence_not_found")
+	}
+	job := enrichment.Job{
+		ID:         newID(),
+		EvidenceID: evidenceID,
+		Status:     enrichment.JobPending,
+		CreatedAt:  time.Now().UTC(),
+		UpdatedAt:  time.Now().UTC(),
+	}
+	s.jobs.Put(job)
+
+	text, err := s.ollama.Generate(context.Background(), crypto.CanonicalizePayload(rec.Payload))
+	if err != nil {
+		job.Status = enrichment.JobFailed
+		job.Error = err.Error()
+		job.UpdatedAt = time.Now().UTC()
+		s.jobs.Put(job)
+		return job, nil
+	}
+	job.Status = enrichment.JobDone
+	job.Output = map[string]string{"summary": text}
+	job.UpdatedAt = time.Now().UTC()
+	s.jobs.Put(job)
+	_ = s.audit.Add("enrichment_done:" + evidenceID)
+	return job, nil
+}
+
+func (s *Service) GetEnrichmentJob(id string) (enrichment.Job, bool) {
+	return s.jobs.Get(id)
+}
