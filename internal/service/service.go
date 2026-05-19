@@ -305,10 +305,10 @@ func (s *Service) BulkVerify(ids []string) []domain.VerificationReport {
 }
 
 type ProofBundle struct {
-	Evidence     domain.EvidenceRecord      `json:"evidence"`
-	Custody      []domain.CustodyEvent      `json:"custody"`
-	Attestations []domain.Attestation       `json:"attestations"`
-	Verification domain.VerificationReport  `json:"verification"`
+	Evidence     domain.EvidenceRecord     `json:"evidence"`
+	Custody      []domain.CustodyEvent     `json:"custody"`
+	Attestations []domain.Attestation      `json:"attestations"`
+	Verification domain.VerificationReport `json:"verification"`
 }
 
 func (s *Service) ExportProofBundle(evidenceID string) (ProofBundle, error) {
