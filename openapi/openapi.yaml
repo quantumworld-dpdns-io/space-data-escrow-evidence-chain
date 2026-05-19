@@ -1,0 +1,199 @@
+openapi: 3.0.3
+info:
+  title: Space Data Escrow Evidence Chain API
+  version: 0.1.0
+servers:
+  - url: http://localhost:8080
+paths:
+  /healthz:
+    get:
+      summary: Liveness check
+      responses:
+        '200':
+          description: OK
+  /readyz:
+    get:
+      summary: Readiness check
+      responses:
+        '200':
+          description: Ready
+  /v1/evidence:
+    post:
+      summary: Create evidence record
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateEvidenceRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvidenceRecord'
+  /v1/evidence/{id}:
+    get:
+      summary: Get evidence record
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvidenceRecord'
+        '404':
+          description: Not Found
+  /v1/custody:
+    post:
+      summary: Append custody event
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustodyEvent'
+      responses:
+        '202':
+          description: Accepted
+  /v1/verify/{id}:
+    post:
+      summary: Verify evidence chain
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Verification report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerificationReport'
+        '404':
+          description: Not Found
+  /v1/search:
+    get:
+      summary: Search evidence
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: query
+          name: q
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EvidenceRecord'
+  /v1/audit:
+    get:
+      summary: Get audit entries
+      security:
+        - ApiKeyAuth: []
+      responses:
+        '200':
+          description: Audit events
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  entries:
+                    type: array
+                    items:
+                      type: string
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+  schemas:
+    CreateEvidenceRequest:
+      type: object
+      required: [external_id, source, type, payload]
+      properties:
+        external_id:
+          type: string
+        source:
+          type: string
+        type:
+          type: string
+        payload:
+          type: object
+          additionalProperties:
+            type: string
+    EvidenceRecord:
+      type: object
+      properties:
+        id:
+          type: string
+        external_id:
+          type: string
+        source:
+          type: string
+        type:
+          type: string
+        payload:
+          type: object
+          additionalProperties:
+            type: string
+        hash:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+    CustodyEvent:
+      type: object
+      required: [evidence_id, actor, action]
+      properties:
+        evidence_id:
+          type: string
+        actor:
+          type: string
+        action:
+          type: string
+        note:
+          type: string
+    VerificationReport:
+      type: object
+      properties:
+        evidence_id:
+          type: string
+        chain_valid:
+          type: boolean
+        signature_valid:
+          type: boolean
+        integrity_valid:
+          type: boolean
+        failure_reason:
+          type: string
+        verified_at:
+          type: string
+          format: date-time
+        last_custody_actor:
+          type: string
