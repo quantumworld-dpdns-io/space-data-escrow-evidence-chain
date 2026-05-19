@@ -292,7 +292,7 @@ func (s *Service) ChainTimeline(evidenceID string) ([]domain.CustodyEvent, error
 }
 
 func (s *Service) AddAttestation(in domain.Attestation) (domain.Attestation, error) {
-	if in.EvidenceID == "" || in.Signer == "" || in.Algorithm == "" || in.Signature == "" {
+	if in.EvidenceID == "" || in.Signer == "" || in.Algorithm == "" {
 		return domain.Attestation{}, errors.New("invalid_attestation")
 	}
 	if _, ok := s.evidence.Get(in.EvidenceID); !ok {
