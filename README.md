@@ -1,34 +1,47 @@
 # space-data-escrow-evidence-chain
 
-> Space data escrow and evidence chain – verifiable chains of custody with timestamping and signed attestations for space data
+Space data escrow and evidence chain platform with verifiable chain-of-custody APIs, audit trails, and security testing.
 
-## Overview
+## Implemented Foundation
 
-This repository is part of the [quantumworld-dpdns-io](https://github.com/quantumworld-dpdns-io) Wild SaaS & Tech Development initiative.
+- Go + Gin API platform (`cmd/api`)
+- Evidence lifecycle APIs: create/get/search/verify
+- Custody event capture and audit trail
+- Deterministic payload hashing (SHA-256)
+- OpenAPI spec (`openapi/openapi.yaml`)
+- Unit/API tests (`go test ./...`)
+- Robot Framework E2E and OWASP Top 10 baseline suites
+- GitHub Actions CI + security workflows
 
-## Getting Started
+## API Endpoints
+
+- `GET /healthz`
+- `GET /readyz`
+- `POST /v1/evidence`
+- `GET /v1/evidence/:id`
+- `POST /v1/custody`
+- `POST /v1/verify/:id`
+- `GET /v1/search?q=...`
+- `GET /v1/audit`
+
+All `/v1/*` endpoints require `X-API-Key`.
+
+## Local Run
 
 ```bash
-# Clone the repo
-git clone https://github.com/quantumworld-dpdns-io/space-data-escrow-evidence-chain.git
-cd space-data-escrow-evidence-chain
+go mod tidy
+make run
 ```
 
-## Project Structure
+## Test
 
-```
-.
-├── src/          # Application source code
-├── docs/         # Architecture decisions, API specs, runbooks
-├── tests/        # Unit / integration / e2e tests
-└── .github/
-    └── workflows/ # CI/CD pipelines
+```bash
+make test
+make robot
+make owasp
 ```
 
-## Contributing
+## Roadmap
 
-Please read [CONTRIBUTING.md](docs/CONTRIBUTING.md) before opening a pull request.
-
-## License
-
-[MIT](LICENSE)
+Detailed 300-commit implementation roadmap:
+- `docs/IMPLEMENTATION_PLAN_300_COMMITS.md`
