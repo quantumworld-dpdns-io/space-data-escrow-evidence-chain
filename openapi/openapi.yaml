@@ -49,6 +49,10 @@ components:
         signature: { type: string }
         algorithm: { type: string }
         timestamp: { type: string, format: date-time }
+        dual_sign: { type: boolean }
+        classical_signature: { type: string }
+        pqc_signature: { type: string }
+        pqc_algorithm: { type: string }
     VerificationReport:
       type: object
       properties:
