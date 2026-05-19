@@ -34,6 +34,8 @@ func (r *Router) routes() {
 	r.mux.HandleFunc("/v1/verify/", r.withAuth(r.verify))
 	r.mux.HandleFunc("/v1/search", r.withAuth(r.search))
 	r.mux.HandleFunc("/v1/audit", r.withAuth(r.audit))
+	r.mux.HandleFunc("/v1/enrich", r.withAuth(r.enrichTrigger))
+	r.mux.HandleFunc("/v1/enrich/", r.withAuth(r.enrichStatus))
 }
 
 func (r *Router) withAuth(next http.HandlerFunc) http.HandlerFunc {
@@ -144,6 +146,20 @@ func (r *Router) search(w http.ResponseWriter, req *http.Request) {
 		req.URL.Query().Get("sort_order"),
 	)
 	result := r.svc.ListEvidence(query)
+	if req.URL.Query().Get("mode") == "semantic" {
+		items, err := r.svc.SemanticSearch(req.URL.Query().Get("q"), query.PageSize)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, APIError{Error: err.Error(), Code: "SRCH_001"})
+			return
+		}
+		writeJSON(w, http.StatusOK, ListEvidenceResponse{
+			Items:    items,
+			Page:     1,
+			PageSize: len(items),
+			Total:    len(items),
+		})
+		return
+	}
 	writeJSON(w, http.StatusOK, ListEvidenceResponse{
 		Items:    result.Items,
 		Page:     result.Page,
@@ -158,6 +174,54 @@ func (r *Router) audit(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, AuditResponse{Entries: r.svc.AuditEntries()})
+}
+
+func (r *Router) enrichTrigger(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, APIError{Error: "method not allowed"})
+		return
+	}
+	var in TriggerEnrichmentRequest
+	if err := json.NewDecoder(req.Body).Decode(&in); err != nil {
+		writeJSON(w, http.StatusBadRequest, APIError{Error: err.Error(), Code: "REQ_001"})
+		return
+	}
+	job, err := r.svc.TriggerEnrichment(in.EvidenceID)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, APIError{Error: err.Error(), Code: "ENRICH_404"})
+		return
+	}
+	writeJSON(w, http.StatusAccepted, EnrichmentJobResponse{
+		ID:         job.ID,
+		EvidenceID: job.EvidenceID,
+		Status:     string(job.Status),
+		Output:     job.Output,
+		Error:      job.Error,
+		CreatedAt:  job.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:  job.UpdatedAt.Format(time.RFC3339),
+	})
+}
+
+func (r *Router) enrichStatus(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, APIError{Error: "method not allowed"})
+		return
+	}
+	id := strings.TrimPrefix(req.URL.Path, "/v1/enrich/")
+	job, ok := r.svc.GetEnrichmentJob(id)
+	if !ok {
+		writeJSON(w, http.StatusNotFound, APIError{Error: "job not found", Code: "ENRICH_404"})
+		return
+	}
+	writeJSON(w, http.StatusOK, EnrichmentJobResponse{
+		ID:         job.ID,
+		EvidenceID: job.EvidenceID,
+		Status:     string(job.Status),
+		Output:     job.Output,
+		Error:      job.Error,
+		CreatedAt:  job.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:  job.UpdatedAt.Format(time.RFC3339),
+	})
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
