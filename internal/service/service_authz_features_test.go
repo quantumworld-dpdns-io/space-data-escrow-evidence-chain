@@ -13,7 +13,7 @@ func TestAttestationAndProofBundle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	_, _ = svc.AppendCustody(domain.CustodyEvent{EvidenceID: rec.ID, Actor: "op", Action: "ingest"}), nil
+	_ = svc.AppendCustody(domain.CustodyEvent{EvidenceID: rec.ID, Actor: "op", Action: "ingest"})
 	_, err = svc.AddAttestation(domain.Attestation{EvidenceID: rec.ID, Signer: "s1", Signature: "sig", Algorithm: "ed25519"})
 	if err != nil {
 		t.Fatalf("attestation: %v", err)
