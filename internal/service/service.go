@@ -61,7 +61,9 @@ func (s *Service) AppendCustody(event domain.CustodyEvent) error {
 	if event.EvidenceID == "" || event.Actor == "" || event.Action == "" {
 		return errors.New("evidence_id, actor, action are required")
 	}
-	event.Timestamp = time.Now().UTC()
+	if event.Timestamp.IsZero() {
+		event.Timestamp = time.Now().UTC()
+	}
 	if err := s.custody.Append(event); err != nil {
 		return err
 	}
