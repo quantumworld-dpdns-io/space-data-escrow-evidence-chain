@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/quantumworld-dpdns-io/space-data-escrow-evidence-chain/internal/domain"
 	"github.com/quantumworld-dpdns-io/space-data-escrow-evidence-chain/internal/service"
 )
 
@@ -68,17 +67,17 @@ func (r *Router) evidenceCreate(w http.ResponseWriter, req *http.Request) {
 		writeJSON(w, http.StatusMethodNotAllowed, APIError{Error: "method not allowed"})
 		return
 	}
-	var in service.CreateEvidenceInput
+	var in CreateEvidenceRequest
 	if err := json.NewDecoder(req.Body).Decode(&in); err != nil {
 		writeJSON(w, http.StatusBadRequest, APIError{Error: err.Error(), Code: "REQ_001"})
 		return
 	}
-	rec, err := r.svc.CreateEvidence(in)
+	rec, err := r.svc.CreateEvidence(service.CreateEvidenceInput(in))
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, APIError{Error: err.Error(), Code: "VAL_001"})
 		return
 	}
-	writeJSON(w, http.StatusCreated, rec)
+	writeJSON(w, http.StatusCreated, CreateEvidenceResponse(rec))
 }
 
 func (r *Router) evidenceGet(w http.ResponseWriter, req *http.Request) {
@@ -92,7 +91,7 @@ func (r *Router) evidenceGet(w http.ResponseWriter, req *http.Request) {
 		writeJSON(w, http.StatusNotFound, APIError{Error: "not found", Code: "EVID_404"})
 		return
 	}
-	writeJSON(w, http.StatusOK, rec)
+	writeJSON(w, http.StatusOK, GetEvidenceResponse(rec))
 }
 
 func (r *Router) custodyAppend(w http.ResponseWriter, req *http.Request) {
@@ -100,7 +99,7 @@ func (r *Router) custodyAppend(w http.ResponseWriter, req *http.Request) {
 		writeJSON(w, http.StatusMethodNotAllowed, APIError{Error: "method not allowed"})
 		return
 	}
-	var evt domain.CustodyEvent
+	var evt CustodyAppendRequest
 	if err := json.NewDecoder(req.Body).Decode(&evt); err != nil {
 		writeJSON(w, http.StatusBadRequest, APIError{Error: err.Error(), Code: "REQ_001"})
 		return
@@ -120,10 +119,10 @@ func (r *Router) verify(w http.ResponseWriter, req *http.Request) {
 	id := strings.TrimPrefix(req.URL.Path, "/v1/verify/")
 	report := r.svc.VerifyEvidence(id)
 	if report.FailureReason == "not_found" {
-		writeJSON(w, http.StatusNotFound, report)
+		writeJSON(w, http.StatusNotFound, VerifyResponse(report))
 		return
 	}
-	writeJSON(w, http.StatusOK, report)
+	writeJSON(w, http.StatusOK, VerifyResponse(report))
 }
 
 func (r *Router) search(w http.ResponseWriter, req *http.Request) {
@@ -139,7 +138,7 @@ func (r *Router) audit(w http.ResponseWriter, req *http.Request) {
 		writeJSON(w, http.StatusMethodNotAllowed, APIError{Error: "method not allowed"})
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"entries": r.svc.AuditEntries()})
+	writeJSON(w, http.StatusOK, AuditResponse{Entries: r.svc.AuditEntries()})
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
