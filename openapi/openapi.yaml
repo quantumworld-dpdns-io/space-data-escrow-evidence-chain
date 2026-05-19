@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Space Data Escrow Evidence Chain API
-  version: 0.2.0
+  version: 0.3.0
 servers:
   - url: http://localhost:8080
 paths:
@@ -27,12 +27,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/VersionResponse'
-              examples:
-                sample:
-                  value:
-                    version: 0.2.0
-                    commit: abc123
-                    build_date: '2026-05-19'
   /v1/evidence:
     post:
       summary: Create evidence record
@@ -44,14 +38,6 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/CreateEvidenceRequest'
-            examples:
-              sample:
-                value:
-                  external_id: EXT-2026-001
-                  source: satellite-a
-                  type: imagery
-                  payload:
-                    file: image-001.tif
       responses:
         '201':
           description: Created
@@ -139,12 +125,32 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/VerificationReport'
+              examples:
+                valid:
+                  value:
+                    evidence_id: e-1
+                    chain_valid: true
+                    signature_valid: true
+                    integrity_valid: true
+                    verified_at: '2026-05-19T12:00:00Z'
+                    last_custody_actor: operator-1
+                    canonical_payload: file=image-001.tif
+                    computed_hash: abcdef
         '404':
           description: Not Found
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/VerificationReport'
+              examples:
+                missing:
+                  value:
+                    evidence_id: missing
+                    chain_valid: false
+                    signature_valid: false
+                    integrity_valid: false
+                    failure_reason: not_found
+                    verified_at: '2026-05-19T12:00:00Z'
   /v1/search:
     get:
       summary: Search evidence
@@ -249,6 +255,9 @@ components:
           type: string
         action:
           type: string
+        timestamp:
+          type: string
+          format: date-time
         note:
           type: string
     VerificationReport:
@@ -268,6 +277,10 @@ components:
           type: string
           format: date-time
         last_custody_actor:
+          type: string
+        canonical_payload:
+          type: string
+        computed_hash:
           type: string
     AuditResponse:
       type: object
