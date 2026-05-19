@@ -1,6 +1,10 @@
 package api
 
-import "github.com/quantumworld-dpdns-io/space-data-escrow-evidence-chain/internal/domain"
+import (
+	"time"
+
+	"github.com/quantumworld-dpdns-io/space-data-escrow-evidence-chain/internal/domain"
+)
 
 type CreateEvidenceRequest struct {
 	ExternalID string            `json:"external_id"`
@@ -40,4 +44,29 @@ type EnrichmentJobResponse struct {
 	Error      string            `json:"error,omitempty"`
 	CreatedAt  string            `json:"created_at"`
 	UpdatedAt  string            `json:"updated_at"`
+}
+
+type AttestationRequest struct {
+	EvidenceID string `json:"evidence_id"`
+	Signer     string `json:"signer"`
+	Signature  string `json:"signature"`
+	Algorithm  string `json:"algorithm"`
+	Timestamp  string `json:"timestamp,omitempty"`
+}
+
+func (r AttestationRequest) ToDomain() domain.Attestation {
+	var ts time.Time
+	if r.Timestamp != "" {
+		parsed, err := time.Parse(time.RFC3339, r.Timestamp)
+		if err == nil {
+			ts = parsed
+		}
+	}
+	return domain.Attestation{
+		EvidenceID: r.EvidenceID,
+		Signer:     r.Signer,
+		Signature:  r.Signature,
+		Algorithm:  r.Algorithm,
+		Timestamp:  ts,
+	}
 }
