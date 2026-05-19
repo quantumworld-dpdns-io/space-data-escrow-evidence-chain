@@ -38,7 +38,7 @@ func New(e repo.EvidenceRepository, c repo.CustodyRepository, a repo.AuditReposi
 	return &Service{
 		evidence: e, custody: c, audit: a, idem: map[string]string{},
 		qdrant: qdrant.NewMemoryClient(), ollama: ollama.NewMemoryClient(), jobs: enrichment.NewStore(),
-		att: map[string][]domain.Attestation{},
+		att:     map[string][]domain.Attestation{},
 		metrics: telemetry.NewRegistry(),
 	}
 }
