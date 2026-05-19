@@ -52,6 +52,10 @@ type AttestationRequest struct {
 	Signature  string `json:"signature"`
 	Algorithm  string `json:"algorithm"`
 	Timestamp  string `json:"timestamp,omitempty"`
+	DualSign   bool   `json:"dual_sign,omitempty"`
+	ClassicalSignature string `json:"classical_signature,omitempty"`
+	PQCSignature string `json:"pqc_signature,omitempty"`
+	PQCAlgorithm string `json:"pqc_algorithm,omitempty"`
 }
 
 func (r AttestationRequest) ToDomain() domain.Attestation {
@@ -68,5 +72,9 @@ func (r AttestationRequest) ToDomain() domain.Attestation {
 		Signature:  r.Signature,
 		Algorithm:  r.Algorithm,
 		Timestamp:  ts,
+		DualSign:   r.DualSign,
+		ClassicalSignature: r.ClassicalSignature,
+		PQCSignature: r.PQCSignature,
+		PQCAlgorithm: r.PQCAlgorithm,
 	}
 }
