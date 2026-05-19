@@ -29,11 +29,11 @@ type Attestation struct {
 }
 
 type VerificationReport struct {
-	EvidenceID      string `json:"evidence_id"`
-	ChainValid      bool   `json:"chain_valid"`
-	SignatureValid  bool   `json:"signature_valid"`
-	IntegrityValid  bool   `json:"integrity_valid"`
-	FailureReason   string `json:"failure_reason,omitempty"`
-	VerifiedAt      string `json:"verified_at"`
+	EvidenceID       string `json:"evidence_id"`
+	ChainValid       bool   `json:"chain_valid"`
+	SignatureValid   bool   `json:"signature_valid"`
+	IntegrityValid   bool   `json:"integrity_valid"`
+	FailureReason    string `json:"failure_reason,omitempty"`
+	VerifiedAt       string `json:"verified_at"`
 	LastCustodyActor string `json:"last_custody_actor,omitempty"`
 }
