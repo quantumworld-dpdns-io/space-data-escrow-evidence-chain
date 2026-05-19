@@ -20,3 +20,10 @@ type VerifyResponse = domain.VerificationReport
 type AuditResponse struct {
 	Entries []string `json:"entries"`
 }
+
+type ListEvidenceResponse struct {
+	Items    []domain.EvidenceRecord `json:"items"`
+	Page     int                     `json:"page"`
+	PageSize int                     `json:"page_size"`
+	Total    int                     `json:"total"`
+}
