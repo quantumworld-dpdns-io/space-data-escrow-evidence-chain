@@ -18,15 +18,13 @@ func main() {
 	apiKey := envOr("EVIDENCE_API_KEY", "dev-api-key")
 	c := cli.New(baseURL, apiKey)
 
-	cmd := os.Args[1]
-	switch cmd {
+	switch os.Args[1] {
 	case "evidence-create":
 		if len(os.Args) < 6 {
 			fmt.Println("usage: evidence-create <external_id> <source> <type> <k=v,k2=v2>")
 			os.Exit(1)
 		}
-		payload := parseKV(os.Args[5])
-		out, _, err := c.DoEvidenceCreate(os.Args[2], os.Args[3], os.Args[4], payload)
+		out, _, err := c.DoEvidenceCreate(os.Args[2], os.Args[3], os.Args[4], parseKV(os.Args[5]))
 		exitOnErr(err)
 		printJSON(out)
 	case "evidence-verify":
