@@ -32,6 +32,13 @@ paths:
       summary: Create evidence record
       security:
         - ApiKeyAuth: []
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: false
+          schema:
+            type: string
+          description: Replays the same create request without creating duplicate evidence.
       requestBody:
         required: true
         content:
@@ -41,6 +48,12 @@ paths:
       responses:
         '201':
           description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvidenceRecord'
+        '200':
+          description: Idempotent replay returns existing evidence
           content:
             application/json:
               schema:
@@ -168,9 +181,7 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/EvidenceRecord'
+                $ref: '#/components/schemas/ListEvidenceResponse'
   /v1/audit:
     get:
       summary: Get audit entries
@@ -290,3 +301,17 @@ components:
           items:
             type: string
       required: [entries]
+    ListEvidenceResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/EvidenceRecord'
+        page:
+          type: integer
+        page_size:
+          type: integer
+        total:
+          type: integer
+      required: [items, page, page_size, total]
